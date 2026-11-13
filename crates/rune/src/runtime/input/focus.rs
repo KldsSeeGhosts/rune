@@ -308,7 +308,7 @@ impl<S: 'static> Runtime<S> {
             candidates.clone().find(|&j| nodes[j].focus.selected)
                 .or_else(|| candidates.into_iter().next())
                 .map(|j| nodes[j].path.clone())
-        });
+        }).or_else(|| self.block_view_focus_fallback(nodes));
         // `Tx::focus`: the first shown element with the key, or its first focusable child.
         let asked = asked.and_then(|(key, ring, ask)| {
             let anchor = (0..nodes.len()).find(|&j| nodes[j].key.as_deref() == Some(key.as_str()) && shown(j))?;
@@ -417,6 +417,7 @@ impl<S: 'static> Runtime<S> {
             if !self.full_keyboard_access && !self.tab_visits_controls {
                 // A control that owns its keyboard (`El::on_key`) is a list of its own.
                 order.retain(|&i| self.nodes[i].input.is_some() || self.nodes[i].focus.key.is_some()
+                    || block_views::owner(&self.nodes, i).is_some()
                     || self.group(i).is_some_and(|g| LIST_ROLES.contains(&self.nodes[g].role)));
             }
             if order.is_empty() { return self.active_modal().is_some(); }

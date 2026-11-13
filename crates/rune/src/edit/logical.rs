@@ -74,6 +74,21 @@ impl CodeAttributes {
 }
 
 impl TextEdit {
+    /// A synced input snapshot's block start in its displayed document. A composition can
+    /// temporarily hide a block boundary without removing its model identity.
+    pub(crate) fn block_view_start(&self, id: BlockId, display: &str) -> Option<usize> {
+        if self.secure { return None; }
+        let line = self.block_ids.iter().position(|&b| b == id)?;
+        let mut at = self.line_range(line).start;
+        if let Some((preedit, _)) = self.preedit() {
+            let (a, b) = self.range();
+            if a < at && at < b { return None; }
+            if at >= b && at > a { at = at - (b - a) + preedit.len(); }
+        }
+        (at <= display.len() && display.is_char_boundary(at)
+            && (at == 0 || display.as_bytes()[at - 1] == b'\n')).then_some(at)
+    }
+
     /// Enumerate logical blocks. Use model editing methods to retain identity. Assigning the
     /// public `text` field directly cannot map attributes or identities through the change.
     /// Authored/logical setters opt HTML into identity persistence; legacy HTML stays unchanged.

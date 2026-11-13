@@ -566,14 +566,16 @@ fn flatten_owned(
     let shared_len = memo_children.as_ref().map_or(0, |m| m.children.len());
     if let Some(shared) = &memo_children {
         for (i, c) in shared.children.iter().enumerate() {
+            let detached = block_views::detached(nodes, me, c.key.as_deref());
             let (kid, kid_dirty) = flatten_ref(c, Some(me), path_buf, i, motion, child_in_row, row, child_sx, taffy, nodes, scale, memo_ctx);
-            taffy.push_child(kid);
+            if !detached { taffy.push_child(kid); }
             children_dirty |= kid_dirty;
         }
     }
     for (j, c) in children.into_iter().enumerate() {
+        let detached = block_views::detached(nodes, me, c.key.as_deref());
         let (kid, kid_dirty) = flatten_owned(c, Some(me), path_buf, shared_len + j, motion, child_in_row, row, child_sx, taffy, nodes, scale, memo_ctx);
-        taffy.push_child(kid);
+        if !detached { taffy.push_child(kid); }
         children_dirty |= kid_dirty;
     }
     path_buf.truncate(prev_len);
@@ -765,8 +767,9 @@ fn flatten_ref(
     let child_mark = taffy.begin_children();
     let mut children_dirty = false;
     for (i, c) in el.all_children().enumerate() {
+        let detached = block_views::detached(nodes, me, c.key.as_deref());
         let (kid, kid_dirty) = flatten_ref(c, Some(me), path_buf, i, motion, child_in_row, row, child_sx, taffy, nodes, scale, memo_ctx);
-        taffy.push_child(kid);
+        if !detached { taffy.push_child(kid); }
         children_dirty |= kid_dirty;
     }
     path_buf.truncate(prev_len);

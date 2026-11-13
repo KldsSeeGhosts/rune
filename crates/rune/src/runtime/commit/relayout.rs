@@ -251,6 +251,7 @@ impl<S: 'static> Measurement<'_, S> {
                 }
             }
             if refit { compute_layout(&mut taffy, root_id, room, &nodes, &mut self.text, scale); }
+            block_views::measure(&mut taffy, root_id, room, &mut nodes, &mut self.text, scale);
         }
         self.stats.layout_nodes = nodes.len();
         #[cfg(debug_assertions)]
@@ -259,12 +260,14 @@ impl<S: 'static> Measurement<'_, S> {
         self.place(&taffy, &mut nodes);
         if self.fit_anchored(&mut taffy, &nodes) {
             compute_layout(&mut taffy, root_id, room, &nodes, &mut self.text, scale);
+            block_views::measure(&mut taffy, root_id, room, &mut nodes, &mut self.text, scale);
             self.place(&taffy, &mut nodes);
         }
         for n in nodes.iter_mut().filter(|n| n.text.is_some()) {
             let w = (taffy.box_layout(n.taffy).w - n.inset[0] - n.inset[2]).max(0.0);
             lay_out_text(&mut self.text, n, w, scale);
         }
+        block_views::place(&mut nodes, scale);
 
         (taffy, nodes)
     }

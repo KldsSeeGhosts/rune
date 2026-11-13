@@ -1,11 +1,28 @@
 use super::*;
 use crate::{Key, Mods, TextEdit, TextStyle, text_input};
 
-#[derive(Default)]
-struct State {
-    edit: TextEdit,
-    selections: Vec<(usize, usize)>,
-    changes: usize,
+// Share Runtime<State> with block-view tests. Another full runtime monomorphization makes
+// the native library-test executable exceed the macOS linker's practical size limits.
+pub(super) struct State {
+    pub(super) edit: TextEdit,
+    pub(super) selections: Vec<(usize, usize)>,
+    pub(super) changes: usize,
+    pub(super) code: crate::BlockId,
+    pub(super) task: crate::BlockId,
+    pub(super) header_height: f32,
+    pub(super) views: bool,
+    pub(super) opt_out: bool,
+    pub(super) presses: usize,
+    pub(super) secure: bool,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        let edit = TextEdit::default();
+        let id = edit.logical_blocks().next().unwrap().id;
+        Self { edit, selections: Vec::new(), changes: 0, code: id, task: id,
+            header_height: 32.0, views: false, opt_out: false, presses: 0, secure: false }
+    }
 }
 
 fn view(s: &State, _: &mut Cx<State>) -> El {

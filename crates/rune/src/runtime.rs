@@ -328,6 +328,8 @@ pub(crate) mod web_export;
 #[path = "runtime/commit/text_layout.rs"]
 mod text_layout;
 use text_layout::*;
+#[path = "runtime/commit/block_views.rs"]
+mod block_views;
 #[path = "runtime/commit/flatten.rs"]
 mod flatten;
 use flatten::*;
@@ -341,6 +343,9 @@ mod apply;
 mod apply_scratch;
 #[path = "runtime/commit/relayout.rs"]
 mod relayout;
+#[cfg(test)]
+#[path = "runtime/commit/block_views_tests.rs"]
+mod block_views_tests;
 #[path = "runtime/virtual/window.rs"]
 mod virtual_window;
 #[path = "runtime/virtual/fill.rs"]

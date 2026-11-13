@@ -97,7 +97,11 @@ impl InputClick {
 }
 
 pub(super) fn hit(e: &crate::edit::TextEdit, l: &Layout<Ink>, x: f32, y: f32, s: f32, single: bool) -> Hit {
-    let h = (l.height() - 1e-3).max(0.0);
+    hit_with_height(e, l, x, y, s, single, l.height())
+}
+
+fn hit_with_height(e: &crate::edit::TextEdit, l: &Layout<Ink>, x: f32, y: f32, s: f32, single: bool, height: f32) -> Hit {
+    let h = (height - 1e-3).max(0.0);
     let ys = if single || x < 0.0 { (y * s).clamp(0.0, h) } else { (y * s).max(0.0) };
     let cur = crate::text::cursor_from_point(l, x * s, ys);
     let caret = e.model_index(cur.index());
@@ -219,6 +223,14 @@ impl<S: 'static> Runtime<S> {
         let single = self.node(&path).and_then(|n| n.input.as_ref()).is_some_and(|i| i.single_line);
         let layout = self.node(&path).and_then(|n| n.text_layout.clone());
         let block_look = self.node(&path).and_then(|n| Some((n.text.as_ref()?.style.size, n.input.as_ref()?.block_style)));
+        let (height, custom_markers) = self.node(&path).and_then(|n| {
+            let spec = n.text.as_ref()?;
+            let layout = n.text_layout.as_ref()?;
+            (!spec.cold.block_slots.is_empty()).then(|| (
+                Some(spec.measured_height(layout, self.env.scale)),
+                spec.cold.block_slots.iter().filter(|s| s.position == crate::text::SlotPosition::Leading).map(|s| s.paragraph).collect::<Vec<_>>(),
+            ))
+        }).unwrap_or_default();
         let s = self.env.scale;
         let scroll = self.input_scroll.get(&path).copied().unwrap_or(0.0);
         match step {
@@ -234,9 +246,10 @@ impl<S: 'static> Runtime<S> {
                     return true;
                 }
                 if let Some(l) = layout {
-                    let h = hit(e, &l, x + scroll, y, s, single);
+                    let h = height.map_or_else(|| hit(e, &l, x + scroll, y, s, single),
+                        |height| hit_with_height(e, &l, x + scroll, y, s, single, height));
                     if !shift && let Some((font_size, style)) = block_look
-                        && input_blocks::block_click(e, &l, h.caret, x + scroll, y, s, font_size, style)
+                        && input_blocks::block_click(e, &l, h.caret, x + scroll, y, s, font_size, style, custom_markers.contains(&e.line_of_byte(h.caret)))
                     {
                         one.commit = one.commit.instant();
                         return true;
@@ -273,7 +286,8 @@ impl<S: 'static> Runtime<S> {
                     return false;
                 }
                 let Some(l) = layout else { return false };
-                let h = hit(e, &l, x + scroll, y, s, single);
+                let h = height.map_or_else(|| hit(e, &l, x + scroll, y, s, single),
+                    |height| hit_with_height(e, &l, x + scroll, y, s, single, height));
                 let at = unit_at(e, h, self.input_click.unit);
                 let (anchor, focus) = extend(self.input_click.origin, at);
                 let before = (e.anchor, e.focus);

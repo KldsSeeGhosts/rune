@@ -53,13 +53,14 @@ fn break_lines_capped(
         let blk = blocks.get(para_idx).copied().unwrap_or(crate::edit::Block::Paragraph);
         let slot = slots.iter().find(|s| s.paragraph == para_idx);
         let leading = slot.filter(|s| s.position == SlotPosition::Leading);
-        let indent = (blk.indent_pt(font_size) * scale).round()
-            .max(leading.map_or(0.0, |s| s.width * scale));
+        let base_indent = (blk.indent_pt(font_size) * scale).round();
+        let indent = base_indent.max(leading.filter(|s| !s.rtl).map_or(0.0, |s| s.width * scale));
         if line_in_para == 0 && let Some(s) = slot.filter(|s| s.position == SlotPosition::Header) {
             let y = breaker.state().line_y() + f64::from(s.height * scale);
             breaker.state_mut().set_line_y(y);
         }
-        let right_pad = if blk == crate::edit::Block::Code { indent } else { 0.0 };
+        let right_pad = (if blk == crate::edit::Block::Code { base_indent } else { 0.0 })
+            .max(leading.filter(|s| s.rtl).map_or(0.0, |s| s.width * scale));
         let line_max = max_width
             .map_or(f32::MAX, |w| (w - indent - right_pad).max(1.0))
             .min(layout_max);

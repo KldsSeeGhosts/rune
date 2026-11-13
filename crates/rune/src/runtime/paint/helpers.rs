@@ -90,7 +90,9 @@ pub(super) fn emit_block_decorations(
             flush_quote(instances, &mut quote_run);
         }
 
-        let custom_marker = first_line_of_para && !is_soft && match spec.cold.block_kinds.get(para_idx) {
+        let leading_view = spec.cold.block_slots.iter().any(|s| s.paragraph == para_idx
+            && s.position == crate::text::SlotPosition::Leading);
+        let custom_marker = first_line_of_para && !is_soft && (leading_view || match spec.cold.block_kinds.get(para_idx) {
             Some(BlockKind::Task { checked, .. }) => {
                 let style = spec.cold.block_style;
                 let d = style.checkbox_size.max(0.0) * s * tk;
@@ -115,7 +117,7 @@ pub(super) fn emit_block_decorations(
                 true
             }
             _ => false,
-        };
+        });
         if first_line_of_para && !custom_marker {
             match blk {
                 Block::Bullet(lvl) => {

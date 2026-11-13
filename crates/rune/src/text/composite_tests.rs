@@ -32,7 +32,7 @@ fn a_header_reserves_height_without_adding_text_or_selection_boxes() {
     let mut t = TextSystem::default();
     let s = spec();
     let a = t.layout_for_spec(&s, 2.0, Some(240.0), Alignment::Start);
-    let slots = [BlockSlot { block: id(), paragraph: 1, position: SlotPosition::Header, width: 120.0, height: 25.0 }];
+    let slots = [BlockSlot { block: id(), paragraph: 1, position: SlotPosition::Header, width: 120.0, height: 25.0, rtl: false }];
     let b = t.layout_composite(&s, &slots, 2.0, Some(240.0), Alignment::Start);
     for (old, new) in a.lines().zip(b.lines()) {
         assert_eq!(old.text_range(), new.text_range());
@@ -52,7 +52,7 @@ fn a_header_reserves_height_without_adding_text_or_selection_boxes() {
 fn leading_dimensions_and_header_heights_are_part_of_the_layout_cache_key() {
     let mut t = TextSystem::default();
     let s = spec();
-    let mut slots = [BlockSlot { block: id(), paragraph: 1, position: SlotPosition::Leading, width: 20.0, height: 24.0 }];
+    let mut slots = [BlockSlot { block: id(), paragraph: 1, position: SlotPosition::Leading, width: 20.0, height: 24.0, rtl: false }];
     let a = t.layout_composite(&s, &slots, 1.0, Some(140.0), Alignment::Start);
     slots[0].width = 90.0;
     let b = t.layout_composite(&s, &slots, 1.0, Some(140.0), Alignment::Start);

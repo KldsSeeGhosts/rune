@@ -62,7 +62,7 @@ pub(crate) use handler_set::Handlers;
 pub use handlers::{Drag, Phase, PointerEvent, PointerPress};
 pub(crate) use handlers::{DragEndFn, DragFn, DragOutFn, InputKeyFn, PointerFn, PressFn, StepFn, StepLimitFn, WindowDrag};
 pub(crate) use help::{HELP_KEY, HELP_ROW, help_words};
-pub use input::{InputSpec, auto_grow, edit_access, text_input};
+pub use input::{InputBlockPosition, InputBlockView, InputSpec, auto_grow, edit_access, text_input};
 pub use pills::InlineIcon;
 pub(crate) use rare::{ElCold, ElFlags, RoleTag};
 pub use rune_motion::Cycle;

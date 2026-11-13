@@ -381,6 +381,7 @@ impl El {
     /// Keep a text field to one line: long text scrolls sideways under the caret instead of
     /// wrapping. Fields are multi-line by default.
     pub fn single_line(mut self) -> Self {
+        self.clear_input_block_views();
         if let Some(i) = self.cold.get_mut_if_some().and_then(|c| c.input.as_deref_mut()) {
             i.single_line = true;
             i.edit.set_single_line(true);

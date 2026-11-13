@@ -120,6 +120,16 @@ therefore remains a gap. It needs model-level selection transaction events or
 stable field bindings; retaining mutable accessors after arbitrary app updates
 is unsafe because a field may have unmounted.
 
+Closing this is not a small notification hook. `TextEdit::set_selection` has only
+a mutable editor, while `runtime/input/editor_selections.rs::next_editor_selection`
+reads the final committed snapshot and invokes a callback with app state. A revision
+counter would detect leave/reentry but could not deliver its intermediate positions
+or normalize source between the operations. The enabling change is a bounded
+per-model selection journal with revisioned event payloads, stable runtime bindings,
+and transaction boundaries where the runtime can safely deliver each event. Direct
+writes to the still-public `anchor` and `focus` fields would also need a setter-only
+migration to guarantee every mutation. The existing callback contract is unchanged.
+
 Touched files:
 
 - `crates/rune/src/edit.rs`
@@ -136,7 +146,7 @@ Touched files:
 Runtime update/request functions moved
 unchanged into `frame/updates.rs` before adding the update notification hook.
 
-### R3, atomic rules and the open block-view capability
+### R3, atomic rules
 
 `R3: add atomic rule editing and document block-view layout gap`
 
@@ -205,41 +215,92 @@ Touched files:
 - `crates/rune/src/runtime/commit/text_layout.rs`
 - `changelog/unreleased/2026-11-12-composite-input-layout.md`
 
-#### Block views are not implemented
+### R3, ordinary block views
 
-There is no `InputBlockView` API and no in-editor language header control.
-The example is a demonstration of completed model APIs, not a proof of full
-composer parity. It handles one balanced bold source region, headings, tasks,
-rules and code attributes. It does not implement a general Markdown parser.
+`R3: attach ordinary block views with composite input layout`
 
-The blocking editor-core layout assumptions are concrete:
+Adds `InputBlockView`, `InputBlockPosition` and `El::input_block_view`. Each logical
+block has at most one view; another attachment replaces it. Registration order
+does not affect document order. `Header` reserves the measured element height
+above the first line, across the full block width including its text inset. `Leading` reserves its
+natural width beside the first line, and any height beyond that line. Leading
+slots follow the paragraph direction and replace default list/task markers.
+Missing identities, secure inputs and single-line inputs omit their views.
+Secure transitions discard old widget visuals immediately rather than fading
+potentially sensitive labels out.
 
-- `crates/rune-taffy/src/view.rs`, `compute_child_layout_inner`, calls Rune's text
-  measurement only for nodes without children. Adding a widget child changes a
-  text input to container layout, so its text no longer determines intrinsic size.
-  The `baseline-taffy` implementation also delegates container sizing to Taffy.
-- `runtime/commit/text_layout.rs`, `compute_layout`, supplies the measured text
-  leaf. `runtime/commit/relayout.rs`, `solve`, places nodes before laying out text.
-  It has no paragraph-anchored child-placement phase.
-- `text/rich_layout.rs` and `text/hash.rs` cache one Parley layout with block
-  indentation. `text/line_break.rs` adjusts paragraph x offsets but has no widget
-  insets in its cache inputs. Caret, selection, IME and accessibility geometry all
-  read that same layout. Drawing an overlay would not reserve header space or
-  update those coordinate consumers.
+Widget subtrees remain children in Rune's runtime, but are separate roots in the
+layout solver. Both `LayoutStore` and `BaselineLayoutStore` already support
+measured leaves and independent subtree roots, so neither solver needs a forked
+container algorithm. `solve` first measures the text, measures widgets at their
+block widths, then remeasures text with the reserved table. After shaping, one
+placement pass moves each complete widget subtree into its slot. The ordinary
+runtime parent chain supplies scrolling, clipping, transforms and accessibility.
+No widget text enters the editor's bytes, clipboard, selection or history.
+Slot layout lands with text reflow instead of springing independently. Ordinary
+entrance/exit fades and hover colors remain; `animated_changes` is an explicit opt-in.
 
-The smallest enabling design is a composite input layout that owns one Parley
-document and a table of reserved widget slots keyed by `BlockId`. Slot dimensions
-must enter line-breaking cache keys. Text measurement must remain active with
-widget children in both layout implementations. After shaping, one placement pass
-must position child widgets from the paragraph geometry and apply the same scroll,
-clip and transform as the editor. Widgets can then use ordinary element event,
-focus and accessibility routing without becoming editable content.
+Views use ordinary handlers and accessibility builders. Pointer presses, including
+blank slot space, do not focus a view or change the editor's caret/composition.
+Tab visits the editor and then views in document order, even when native settings
+normally skip buttons. A view's `focusable(false)` and ordinary Tab overrides still
+apply. With views attached, Tab traverses instead of performing default code/list
+indentation; an app can handle an editing chord through `on_input_key`.
+Escape returns keyboard focus to the editor. Removing a focused view also returns
+focus to its surviving editor. Unmounted widgets follow Rune's ordinary exit
+presentation, but stop accepting events immediately.
 
-That change still needs tests for header hit testing, keyboard events, rewrapping,
-scroll tracking, cross-block caret/selection and IME continuity. No ignored test
-or overlay claims those cases work in this fork.
+Block anchors map through an IME preedit splice without changing model identity.
+A composition that hides a block boundary temporarily omits its widget. Canceling
+the composition restores that attachment. The input snapshot carries these derived
+anchors, avoiding document clones during measurement and placement.
+
+Tests compare no-view layout, measurement and paint bytes; cover header and leading
+dimensions, wrapping, resize, scrolling, transforms, selection, copy, pointer/key
+events, Tab/Escape, focus opt-out, accessibility actions, IME continuity, empty code,
+identity through history, block removal, and secure/single-line transitions.
+Selection and block-view tests share one fixture state to avoid duplicating the
+generic runtime in the native test executable.
+
+Touched files:
+
+- `crates/rune/src/el.rs`
+- `crates/rune/src/el/{input,text}.rs`
+- `crates/rune/src/el/input/block_view.rs`
+- `crates/rune/src/edit/logical.rs`
+- `crates/rune/src/lib.rs`
+- `crates/rune/src/runtime.rs`
+- `crates/rune/src/runtime/commit/{apply,block_views,block_views_tests,flatten,relayout}.rs`
+- `crates/rune/src/runtime/input/{editor_selection_tests,focus,keys,pointer}.rs`
+- `crates/rune/src/runtime/selection/{blocks,click}.rs`
+- `crates/rune/src/runtime/paint/helpers.rs`
+- `crates/rune/src/text/{composite,composite_tests,line_break}.rs`
+- `changelog/unreleased/2026-11-12-input-block-views.md`
 
 ## Rebase notes
+
+For block views, keep three hooks together:
+
+- Flatten widget wrappers into runtime children, but do not push those roots into
+  the input's solver child list. Retain their solver slots just like other nodes;
+  memo reuse and virtual remount already visit every runtime node.
+- Run `block_views::measure` after root measurement, including after anchored-fit
+  changes. Run `block_views::place` after every node's text is shaped. Slot dimensions
+  and direction belong in the break-cache key, not the shaping key. Keep the
+  original empty-slot path unchanged.
+- Parley does not include explicit line-y gaps in `Layout::height`. Input intrinsic
+  height, text extent and negative-x pointer clamping must use the composite height.
+  Caret, selection, IME and text-run accessibility otherwise read the same Parley
+  line geometry. Do not add synthetic characters to reserve widget space.
+
+`InputSpec::block_views` owns attachment metadata. Clear it and its wrapper children
+when secure or single-line builders run. Derive display anchors from the snapshot's
+composition, not the secure-mask-only `display_index` helper. Preserve pointer focus
+for widget descendants; keep Tab traversal, Escape and removed-view focus fallback
+separate from text editing. Default marker paint and task hit targets must not
+duplicate a leading view. Ordinary widget accessibility needs no separate tree.
+Keep the apply hook that unmounts old widget descendants when an input becomes
+secure, including widgets already in an exit presentation.
 
 The replacement engine and HTML parser were extracted without changing their
 algorithms before adding hooks, to keep the owning files below the size limit.
@@ -303,6 +364,23 @@ When upstream changes these functions, transplant its implementation into
 ## Validation limits
 
 Tests exercise the model and headless runtime. They do not verify native IME,
-screen readers, Windows or Linux. Block widgets require the composite layout
-capability described above. The example deliberately does not show a substitute
-language picker outside the block.
+screen readers, Windows or Linux. Exact per-mutation selection notifications remain
+the R4 gap described above. The example's source grammar handles one balanced bold
+region, not general Markdown parsing.
+
+On macOS, the large library-test executable can hit Apple's compact-unwind linker
+assertion or fail to spawn near 2 GB. Editor tests share their fixture state to limit
+runtime monomorphizations. These invocation-only settings reduce debug information
+and bound test concurrency without changing the unoptimized debug test profile:
+
+```sh
+CARGO_PROFILE_TEST_DEBUG=0 RUST_TEST_THREADS=4 cargo test \
+  -p rune -p rune-mermaid -p rune-kit \
+  --features rune-kit/markdown,rune-kit/mermaid
+```
+
+This changes no repository or machine configuration. Debug assertions and overflow
+checks remain enabled. Bounded concurrency avoids AppKit clipboard conversion
+timeouts under concurrent build load.
+Do not disable compact unwind generation: that made Rust panic unwinding fail in
+the existing transaction rollback test.

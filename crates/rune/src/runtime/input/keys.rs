@@ -18,6 +18,7 @@ impl<S: 'static> Runtime<S> {
         // Return and Escape that reach a field mid-composition belong to the input method: they
         // confirm or cancel it, and submit, blur and press nothing.
         if matches!(ev.key, crate::Key::Enter | crate::Key::Escape) && self.composing() { return true; }
+        if self.block_view_escape(ev, one) { return true; }
         if self.element_key(ev, one) { return true; }
         one.physical_key = None;
         if self.default_button_key(ev, one) { return true; }
@@ -40,6 +41,7 @@ impl<S: 'static> Runtime<S> {
             && !ev.mods.ctrl
             && self.focused_input().is_some_and(|i| {
                 !i.single_line
+                    && i.block_views.is_empty()
                     && !i.edit.is_secure()
                     && (i.edit.selection_in_list() || (!ev.mods.shift && i.edit.active_block() == crate::edit::Block::Code))
             })

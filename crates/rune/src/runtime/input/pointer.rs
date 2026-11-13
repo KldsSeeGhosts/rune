@@ -237,6 +237,7 @@ impl<S: 'static> Runtime<S> {
             }
             return;
         }
+        let block_view = block_views::owner(&self.nodes, ti).is_some();
         let n = &self.nodes[ti];
         let clicks = self.press_clicks.press(&n.path, now, (x, y), self.double_click_interval);
         let second = n.handlers.on_double_press.is_some() && pending.is_some_and(|first| {
@@ -256,15 +257,15 @@ impl<S: 'static> Runtime<S> {
         // `tabIndex` scroller (a `ScrollView`) clicked where nothing inside takes focus; and a
         // press on a layer that hands focus below it (`El::press_focuses_below`) focuses the one
         // under the pointer.
-        if n.focus.below && !on_link {
+        if n.focus.below && !on_link && !block_view {
             match self.scroll_region_below(ti, x, y) {
                 Some(r) => self.queue.push(Action::FocusControl(self.nodes[r].path.clone())),
                 None if self.focus.path().is_some() => self.queue.push(Action::Blur),
                 None => {}
             }
         }
-        let takes_focus = n.focus.enabled || (self.takes_focus(n) && !self.press_keeps_focus(ti));
-        let keyed = (!takes_focus && !self.is_selectable(ti)).then(|| std::iter::successors(n.parent, |&p| self.nodes[p].parent)
+        let takes_focus = !block_view && (n.focus.enabled || (self.takes_focus(n) && !self.press_keeps_focus(ti)));
+        let keyed = (!block_view && !takes_focus && !self.is_selectable(ti)).then(|| std::iter::successors(n.parent, |&p| self.nodes[p].parent)
             .take_while(|&p| self.allowed(p))
             .find(|&p| (self.nodes[p].focus.key.is_some() || self.focuses_on_click(p)) && self.can_focus(p))).flatten();
         let in_textbox = std::iter::successors(n.parent, |&p| self.nodes[p].parent).any(|p| self.textbox_input(p).is_some());

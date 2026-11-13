@@ -11,10 +11,12 @@ pub(super) fn block_click(
     scale: f32,
     font_size: f32,
     style: crate::BlockStyle,
+    custom_marker: bool,
 ) -> bool {
     let line = edit.line_of_byte(byte);
     match edit.block_kind(line) {
         crate::BlockKind::Rule => edit.select_rule_at(byte),
+        crate::BlockKind::Task { .. } if custom_marker => false,
         crate::BlockKind::Task { checked, .. } => {
             let start = edit.display_index(edit.line_range(line).start);
             let Some(first) = layout.lines().find(|l| l.text_range().start == start) else { return false };

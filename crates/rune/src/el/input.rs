@@ -2,6 +2,10 @@
 
 use super::*;
 
+mod block_view;
+pub use block_view::{InputBlockPosition, InputBlockView};
+pub(crate) use block_view::BlockViewSpec;
+
 /// A text field bound to a [`TextEdit`] in app state.
 #[derive(Clone)]
 pub struct InputSpec {
@@ -34,6 +38,7 @@ pub struct InputSpec {
     pub(crate) spellcheck: bool,
     /// [`El::selection_style`]: the selection's highlight and ink, by window focus, over `selection`.
     pub(crate) selection_style: Option<SelectionStyle>,
+    pub(crate) block_views: Vec<BlockViewSpec>,
 }
 
 impl std::fmt::Debug for InputSpec {
@@ -94,6 +99,7 @@ pub fn text_input(edit: &TextEdit, style: TextStyle) -> El {
         paste: None,
         spellcheck: false,
         selection_style: None,
+        block_views: Vec::new(),
     }));
     e.sync_input_pills();
     e.sync_input_rich();
@@ -154,6 +160,7 @@ impl El {
     /// describe the field, not contain its secret value. Links and rolling text are disabled.
     /// Pair with [`revealed`](Self::revealed) to toggle plaintext display.
     pub fn secure(mut self) -> Self {
+        self.clear_input_block_views();
         self.cold_mut().a11y.secure = true;
         if let Some(input) = self.cold.get_mut_if_some().and_then(|c| c.input.as_deref_mut()) {
             input.edit.set_secure(true);

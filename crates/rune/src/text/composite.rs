@@ -13,6 +13,7 @@ pub(crate) struct BlockSlot {
     pub position: SlotPosition,
     pub width: f32,
     pub height: f32,
+    pub rtl: bool,
 }
 
 pub(crate) fn slots_key(slots: &[BlockSlot]) -> u64 {
@@ -20,7 +21,7 @@ pub(crate) fn slots_key(slots: &[BlockSlot]) -> u64 {
     let mut h = hash::KeyHasher::default();
     0x626c_6f63_6b73_6c6fu64.hash(&mut h);
     for s in slots {
-        (s.block, s.paragraph, s.position, s.width.to_bits(), s.height.to_bits()).hash(&mut h);
+        (s.block, s.paragraph, s.position, s.width.to_bits(), s.height.to_bits(), s.rtl).hash(&mut h);
     }
     h.finish()
 }

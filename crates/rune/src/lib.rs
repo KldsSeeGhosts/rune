@@ -123,6 +123,8 @@ pub use el::Drag;
 pub use el::El;
 pub use el::GrowthSpec;
 pub use el::InlineIcon;
+pub use el::InputBlockPosition;
+pub use el::InputBlockView;
 pub use el::LiveRegion;
 pub use el::Outline;
 pub use el::Phase;
