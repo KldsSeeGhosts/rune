@@ -53,22 +53,26 @@ impl TextEdit {
     pub fn set_secure(&mut self, secure: bool) {
         self.secure = secure;
         if secure {
+            self.invalidate_capture();
             self.history = Arc::default();
-            self.rewrite = Rewrite::Canonical;
+            self.discard_rewrite();
             if self.group.is_open() {
                 self.group = Group::Unrecorded;
             }
             self.marks.clear();
             self.blocks.clear();
             self.block_ids.clear();
+            self.clear_block_selection();
             self.block_data.clear();
             self.soft_breaks.clear();
             self.typing = Typing::Inherited;
             self.cancel_composition();
-        } else if let Group::Unrecorded = self.group {
-            // A group opened while secure starts recording from here.
+        } else {
             self.sync_invariants();
-            self.group = Group::Open(self.snapshot_now());
+            if let Group::Unrecorded = self.group {
+                // A group opened while secure starts recording from here.
+                self.group = Group::Open(self.snapshot_now());
+            }
         }
     }
 

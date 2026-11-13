@@ -172,7 +172,11 @@ impl TextEdit {
         if self.secure { self.block_data.clear(); return; }
         if self.block_data.is_empty() { return; }
         self.block_data.resize(self.blocks.len(), BlockData::default());
-        for (d, &block) in self.block_data.iter_mut().zip(&self.blocks) {
+        let content: Vec<bool> = if self.block_data.iter().any(|d| d.kind == Some(BlockKind::Rule)) {
+            self.text.split('\n').map(|s| !s.is_empty()).collect()
+        } else { Vec::new() };
+        for (i, (d, &block)) in self.block_data.iter_mut().zip(&self.blocks).enumerate() {
+            if d.kind == Some(BlockKind::Rule) && content.get(i) == Some(&true) { d.kind = None; }
             if d.kind.is_some_and(|k| k.legacy() != block) {
                 // Legacy APIs changed a block. Never let a stale extended kind override it.
                 d.kind = match d.kind {

@@ -204,9 +204,10 @@ impl El {
         }
         self
     }
-    /// Called after a selection or IME cursor changes through keyboard, pointer,
+    /// Called after a committed selection or IME cursor changes through keyboard, pointer,
     /// accessibility, history, or a programmatic runtime update/poll. Reads the updated
-    /// model through app state. Unchanged selections and secure fields do not notify.
+    /// model through app state. History movement also notifies when its byte offsets stay
+    /// unchanged. Other unchanged selections and secure fields do not notify.
     /// Changes made by the callback itself settle as part of this notification.
     pub fn on_input_selection_change<S: 'static>(mut self, f: impl Fn(&mut S, &mut Tx) + 'static) -> Self {
         if let Some(input) = self.cold.get_mut_if_some().and_then(|c| c.input.as_deref_mut()) {

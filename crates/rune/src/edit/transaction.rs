@@ -3,6 +3,11 @@
 use super::*;
 use super::history::Snapshot;
 
+mod capture;
+mod rewrite;
+pub(super) use capture::State as Capture;
+pub(super) use rewrite::State as Rewrite;
+
 /// A recorded transaction becomes one undo step. A transient transaction keeps both history
 /// stacks intact and holds their canonical document until the next history or recorded edit.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -21,27 +26,6 @@ impl std::fmt::Display for TransactionError {
 }
 impl std::error::Error for TransactionError {}
 
-#[derive(Default)]
-pub(super) enum Capture {
-    #[default]
-    Idle,
-    Active { map: EditMap, explicit_selection: bool },
-}
-
-impl Clone for Capture {
-    fn clone(&self) -> Self { Self::Idle }
-}
-impl PartialEq for Capture {
-    fn eq(&self, _: &Self) -> bool { true }
-}
-
-#[derive(Clone, Default, Debug, PartialEq)]
-pub(super) enum Rewrite {
-    #[default]
-    Canonical,
-    Detached { baseline: Snapshot, map: EditMap },
-}
-
 impl TextEdit {
     /// Apply model operations and return their edit map. Use `replace_range`, `insert` and
     /// the attributed setters, not direct assignment to public fields.
@@ -51,6 +35,8 @@ impl TextEdit {
     /// canonical document; the next recorded edit includes the rewrite in its own undo step.
     /// This rebases incoming edits rather than modifying old history snapshots in place.
     /// Rewrites refuse active IME composition and cannot nest in transactions or undo groups.
+    /// Entering secure mode during the closure aborts capture and discards old history.
+    /// That security change is retained even if the closure panics.
     pub fn transact(&mut self, options: TransactionOptions, f: impl FnOnce(&mut Self)) -> Result<EditMap, TransactionError> {
         if self.secure { return Err(TransactionError::Secure); }
         if self.is_composing() { return Err(TransactionError::Composing); }
@@ -59,19 +45,25 @@ impl TextEdit {
         let before = self.snapshot_now();
         let history = self.history.clone();
         let rewrite = self.rewrite.clone();
-        self.capture = Capture::Active { map: EditMap::default(), explicit_selection: false };
+        let _ = capture::step(&mut self.capture, capture::Event::Begin);
         struct Reset<'a> {
             edit: &'a mut TextEdit,
             rollback: Option<(Snapshot, Arc<History>, Rewrite)>,
         }
         impl Drop for Reset<'_> {
             fn drop(&mut self) {
-                self.edit.capture = Capture::Idle;
+                let secured = matches!(self.edit.capture, Capture::Secured);
+                let _ = capture::step(&mut self.edit.capture, capture::Event::Abort);
                 self.edit.group = Group::Closed;
+                if secured {
+                    self.rollback = None;
+                    self.edit.clear_history();
+                    return;
+                }
                 if let Some((snapshot, history, rewrite)) = self.rollback.take() {
                     self.edit.restore(&snapshot);
                     self.edit.history = history;
-                    self.edit.rewrite = rewrite;
+                    let _ = rewrite::step(&mut self.edit.rewrite, rewrite::Event::Restore(rewrite));
                 }
             }
         }
@@ -82,20 +74,25 @@ impl TextEdit {
                 guard.edit.group = Group::Unrecorded;
                 f(guard.edit);
                 guard.edit.group = Group::Closed;
-                guard.edit.history = history;
+                if !matches!(guard.edit.capture, Capture::Secured) { guard.edit.history = history; }
             }
         }
-        let Capture::Active { map, explicit_selection } = std::mem::take(&mut guard.edit.capture) else { unreachable!() };
+        let effect = capture::step(&mut guard.edit.capture, capture::Event::Finish).into_iter().next();
+        let (map, explicit_selection) = match effect {
+            Some(capture::Effect::Finished { map, explicit_selection }) => (map, explicit_selection),
+            Some(capture::Effect::Secured) => {
+                guard.rollback = None;
+                guard.edit.clear_history();
+                return Err(TransactionError::Secure);
+            }
+            None => unreachable!(),
+        };
         if options == TransactionOptions::Transient {
             if !explicit_selection {
                 guard.edit.anchor = map.map(before.anchor, MapBias::After);
                 guard.edit.focus = map.map(before.focus, MapBias::After);
             }
-            guard.edit.rewrite = match std::mem::take(&mut guard.edit.rewrite) {
-                Rewrite::Canonical => Rewrite::Detached { baseline: before, map: map.clone() },
-                Rewrite::Detached { baseline, map: previous } =>
-                    Rewrite::Detached { baseline, map: previous.then(&map) },
-            };
+            let _ = rewrite::step(&mut guard.edit.rewrite, rewrite::Event::Rewritten { baseline: before, map: map.clone() });
         }
         guard.edit.sync_invariants();
         guard.rollback = None;
@@ -111,21 +108,26 @@ impl TextEdit {
     }
 
     pub(super) fn capture_replace(&mut self, a: usize, b: usize, inserted: usize) {
-        if let Capture::Active { map, .. } = &mut self.capture { map.push(a..b, inserted); }
+        let _ = capture::step(&mut self.capture, capture::Event::Replace { range: a..b, inserted });
     }
 
     pub(super) fn explicit_selection(&mut self) {
-        if let Capture::Active { explicit_selection, .. } = &mut self.capture { *explicit_selection = true; }
+        let _ = capture::step(&mut self.capture, capture::Event::Selection);
+    }
+
+    pub(super) fn invalidate_capture(&mut self) {
+        let _ = capture::step(&mut self.capture, capture::Event::Secure);
+    }
+
+    pub(super) fn discard_rewrite(&mut self) {
+        let _ = rewrite::step(&mut self.rewrite, rewrite::Event::Discard);
     }
 
     /// Canonical baseline for a new recorded edit, with its selection mapped back from the
     /// detached source. The recorded after-state includes that source plus the actual edit.
     pub(super) fn take_rewrite_baseline(&mut self, anchor: usize, focus: usize) -> Option<Snapshot> {
-        let Rewrite::Detached { mut baseline, map } = std::mem::take(&mut self.rewrite) else { return None };
-        let inverse = map.inverse();
-        baseline.anchor = Self::clamp_char_boundary(&baseline.text, inverse.map(anchor, MapBias::After));
-        baseline.focus = Self::clamp_char_boundary(&baseline.text, inverse.map(focus, MapBias::After));
-        Some(baseline)
+        rewrite::step(&mut self.rewrite, rewrite::Event::Consume { anchor, focus })
+            .into_iter().next().map(|rewrite::Effect::Baseline(snapshot)| snapshot)
     }
 
     pub(super) fn restore_canonical(&mut self) {

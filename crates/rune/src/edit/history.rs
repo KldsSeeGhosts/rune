@@ -16,6 +16,7 @@ pub(super) struct Snapshot {
     marks: Vec<MarkRange>,
     blocks: Vec<Block>,
     block_ids: Vec<BlockId>,
+    block_selection: SelectionState,
     block_data: Vec<BlockData>,
     soft_breaks: Vec<u32>,
 }
@@ -64,6 +65,14 @@ impl PartialEq for Group {
 /// Non-content-derived edit state. Never retain a fingerprint of a secret.
 #[derive(Clone, Copy, Default)]
 pub(super) struct EditedTag(pub(super) bool);
+
+/// History changes selection context even when a mark-only undo keeps the same byte offsets.
+#[derive(Clone, Copy, Default)]
+pub(super) struct MovementTag(pub(super) u64);
+
+impl PartialEq for MovementTag {
+    fn eq(&self, _: &Self) -> bool { true }
+}
 
 impl PartialEq for EditedTag {
     fn eq(&self, _: &Self) -> bool {
@@ -157,11 +166,12 @@ pub(super) fn step(run: &mut Run, kind: EditKind, into_empty: bool) -> Record {
 }
 
 impl TextEdit {
+    pub(crate) fn history_movement(&self) -> u64 { self.movement_tag.0 }
     /// Drop the undo and redo stacks, keeping text, marks, blocks, soft breaks and the selection
     /// (after loading a sent message back into a composer to edit it, say).
     pub fn clear_history(&mut self) {
         self.history = Arc::default();
-        self.rewrite = Rewrite::Canonical;
+        self.discard_rewrite();
         if self.group.is_open() {
             self.sync_invariants();
             self.group = self.group_from_here();
@@ -192,6 +202,7 @@ impl TextEdit {
             marks: self.marks.clone(),
             blocks: self.blocks.clone(),
             block_ids: self.block_ids.clone(),
+            block_selection: self.block_selection,
             block_data: self.block_data.clone(),
             soft_breaks: self.soft_breaks.clone(),
         }
@@ -209,6 +220,7 @@ impl TextEdit {
         self.marks = s.marks.clone();
         self.blocks = s.blocks.clone();
         self.block_ids = s.block_ids.clone();
+        self.block_selection = s.block_selection;
         self.block_data = s.block_data.clone();
         self.soft_breaks = s.soft_breaks.clone();
         self.typing = Typing::Inherited;
@@ -310,6 +322,7 @@ impl TextEdit {
         if self.text != change.after.text.as_str() { *h = History::default(); return; }
         self.restore(&change.before);
         Arc::make_mut(&mut self.history).redo.push(change);
+        self.movement_tag.0 = self.movement_tag.0.wrapping_add(1);
     }
 
     pub fn redo(&mut self) {
@@ -322,6 +335,7 @@ impl TextEdit {
         if self.text != change.before.text.as_str() { *h = History::default(); return; }
         self.restore(&change.after);
         Arc::make_mut(&mut self.history).undo.push_back(change);
+        self.movement_tag.0 = self.movement_tag.0.wrapping_add(1);
     }
 }
 

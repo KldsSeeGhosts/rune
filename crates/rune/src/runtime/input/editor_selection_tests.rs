@@ -110,3 +110,61 @@ fn transient_source_in_a_runtime_keeps_redo_and_returns_the_selection_map() {
     rt.frame(0.0);
     assert_eq!(rt.state.edit.text, "abcdefX");
 }
+
+#[test]
+fn mark_only_history_movement_notifies_even_at_identical_selection_offsets() {
+    let mut rt = runtime();
+    rt.update(|s, _| {
+        s.edit.set_selection(1, 4);
+        s.edit.set_mark(crate::Mark::Bold);
+    });
+    rt.frame(0.0);
+    let before = rt.state.selections.len();
+    rt.key(KeyEvent { key: Key::Command('z'), mods: Mods { cmd: true, ..Default::default() } });
+    rt.frame(0.0);
+    assert_eq!(rt.state.selections.len(), before + 1);
+    assert_eq!(rt.state.selections.last(), Some(&(1, 4)));
+    rt.key(KeyEvent { key: Key::Command('z'), mods: Mods { cmd: true, shift: true, ..Default::default() } });
+    rt.frame(0.0);
+    assert_eq!(rt.state.selections.len(), before + 2);
+    assert_eq!(rt.state.changes, 0);
+}
+
+#[derive(Default)]
+struct Dynamic {
+    edit: Option<TextEdit>,
+    notifications: usize,
+}
+
+fn dynamic_view(s: &Dynamic, _: &mut Cx<Dynamic>) -> El {
+    match &s.edit {
+        Some(edit) => text_input(edit, TextStyle::new(16.0, 400.0)).key("dynamic")
+            .on_edit(|s: &mut Dynamic| s.edit.as_mut().unwrap())
+            .on_input_selection_change(|s: &mut Dynamic, _| {
+                s.notifications += 1;
+                s.edit = None;
+            }),
+        None => crate::col(),
+    }
+}
+
+#[test]
+fn unmounting_an_observed_field_does_not_call_its_stale_accessor() {
+    let mut rt = Runtime::new(Dynamic { edit: Some(TextEdit::new("abc")), ..Default::default() },
+        dynamic_view, (300.0, 100.0), Env::new(true, 2.0));
+    rt.frame(0.0);
+    rt.update(|s, _| s.edit = None);
+    rt.frame(0.0);
+    assert_eq!(rt.state.notifications, 0);
+}
+
+#[test]
+fn a_selection_callback_can_remove_its_own_editor() {
+    let mut rt = Runtime::new(Dynamic { edit: Some(TextEdit::new("abc")), ..Default::default() },
+        dynamic_view, (300.0, 100.0), Env::new(true, 2.0));
+    rt.frame(0.0);
+    rt.update(|s, _| s.edit.as_mut().unwrap().set_caret(0));
+    rt.frame(0.0);
+    assert_eq!(rt.state.notifications, 1);
+    assert!(rt.state.edit.is_none());
+}

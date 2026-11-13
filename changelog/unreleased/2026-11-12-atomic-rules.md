@@ -1,0 +1,1 @@
+- Rich editors select horizontal rules as atomic objects, with keyboard, pointer, accessibility, replacement, rich copy and undo/redo support. Default task checkboxes accept pointer clicks without moving the editor selection. The Markdown model example demonstrates source reveal with redo retained; per-block header widgets still require composite editor layout.

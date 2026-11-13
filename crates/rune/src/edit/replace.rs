@@ -184,6 +184,7 @@ impl TextEdit {
             return;
         }
         self.sync_invariants();
+        if self.replace_rule((a, b), s, kind) { return; }
         // Backspace or Delete next to a pill, or a selection into one, takes it whole.
         let (a, b) = self.cover_pills(a, b);
         if kind == EditKind::Other { self.break_history_group(); }

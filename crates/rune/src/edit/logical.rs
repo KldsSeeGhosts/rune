@@ -77,9 +77,11 @@ impl TextEdit {
     /// Enumerate logical blocks. Use model editing methods to retain identity. Assigning the
     /// public `text` field directly cannot map attributes or identities through the change.
     /// Authored/logical setters opt HTML into identity persistence; legacy HTML stays unchanged.
+    /// Secure fields expose no logical blocks.
     pub fn logical_blocks(&self) -> impl Iterator<Item = LogicalBlock> {
-        let e = self.synced();
         let mut out: Vec<LogicalBlock> = Vec::new();
+        if self.secure { return out.into_iter(); }
+        let e = self.synced();
         for p in e.paragraphs() {
             let id = e.block_ids[p.index];
             if let Some(last) = out.last_mut().filter(|b| b.id == id) {

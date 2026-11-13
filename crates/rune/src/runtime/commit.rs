@@ -123,6 +123,25 @@ pub(super) struct Measured {
 
 impl<S: 'static> Runtime<S> {
     pub(super) fn commit(&mut self, tx: &Tx) {
+        self.commit_once(tx);
+        let mut notified = HashSet::default();
+        while let Some((path, callback)) = self.next_editor_selection(&notified) {
+            notified.insert(path);
+            let mut one = self.transaction();
+            one.by_keys = tx.by_keys;
+            one.mods = tx.mods;
+            one.input_time = tx.input_time;
+            one.commit = tx.commit;
+            callback(states!(self), &mut one);
+            self.latch_requests(&mut one);
+            self.dirty = true;
+            self.state_unchanged = false;
+            self.commit_once(&one);
+            merge(&mut self.pending, one);
+        }
+    }
+
+    fn commit_once(&mut self, tx: &Tx) {
         let _commit_time = crate::frame::profile::Scope::new(crate::frame::profile::Phase::Commit);
         let _first_view = crate::tooling::perf_warn::launch::FirstView::start(self.commits == 0);
         let budget = crate::tooling::perf_warn::budget::Commit::start();
@@ -159,7 +178,6 @@ impl<S: 'static> Runtime<S> {
             measured = self.settle_layout_reads(measured, tx);
         }
         self.apply(measured, tx);
-        self.register_editor_selections();
         self.scene.keep_flights(false);
         self.memo.keep_since(self.memo_since);
         self.track_focused_rows();

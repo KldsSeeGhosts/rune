@@ -288,6 +288,12 @@ impl<S: 'static> Runtime<S> {
                 }
                 if e.focused && !departing {
                     let (a, b) = e.range();
+                    if e.preedit().is_none()
+                        && let Some(rect) = rule_selection_rect(e, layout, origin, x0, x1, tk)
+                    {
+                        let (highlight, _) = inp.selection_style.map_or((inp.selection, None), |st| st.pick(self.window_focused != Some(false)));
+                        self.instances.push(rect_inst(rect, premul(highlight, o, srgb), 0.0, clip, fade));
+                    }
                     if a != b && e.preedit().is_none() {
                         let (da, db) = e.display_selection_range(a, b);
                         // An inactive window paints a field's selection in its inactive pair, as a browser does.
@@ -297,7 +303,7 @@ impl<S: 'static> Runtime<S> {
                         selected_ink = ink.map(|c| (da, db, premul(c, o, srgb)));
                     }
                     // A range selection hides the caret, as a browser's field and a native one do.
-                    if a == b || e.is_composing() {
+                    if (a == b && e.selected_rule().is_none()) || e.is_composing() {
                         caret = input_caret;
                     }
                     if e.is_composing()

@@ -19,6 +19,7 @@ impl TextEdit {
     }
 
     pub(super) fn set(&mut self, i: usize, extend: bool) {
+        self.clear_block_selection();
         // A caret moving into a pill steps over it, the way it was going.
         let i = self.out_of_pill(i, i > self.focus);
         self.focus = i;
@@ -47,6 +48,7 @@ impl TextEdit {
         let mut out = EditOutcome::default();
         if matches!(ev.key, Key::Modifier { .. }) { return out; }
         self.sync_invariants();
+        if self.rule_key(ev) { return out; }
         let m = ev.mods;
         self.normalize_hidden_selection();
         if self.is_hidden_multiline() && matches!(ev.key, Key::Left | Key::Right | Key::Up | Key::Down | Key::Home | Key::End) {
@@ -277,6 +279,7 @@ impl TextEdit {
             },
             Key::Function(_) | Key::ContextMenu | Key::Insert | Key::PrintScreen | Key::ScrollLock | Key::Pause | Key::Modifier { .. } => {}
         }
+        self.finish_rule_navigation(ev);
         out
     }
 

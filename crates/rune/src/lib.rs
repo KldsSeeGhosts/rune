@@ -96,6 +96,7 @@ pub use edit::BlockRangeError;
 pub use edit::BlockStyle;
 pub use edit::CodeAttributes;
 pub use edit::EditMap;
+pub use edit::EditorSelection;
 pub use edit::Ime;
 pub use edit::Key;
 pub use edit::KeyEvent;

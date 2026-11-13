@@ -244,6 +244,17 @@ pub(super) fn input_caret(n: &Node, r: [f32; 4], scale: f32, s: f32, gliding: bo
     Some(([caret_x, cy + h * 0.1, caret_w, h * 0.8], [cx / s, cy / s, 2.0 * scale, h / s]))
 }
 
+pub(super) fn rule_selection_rect(edit: &crate::TextEdit, layout: &Layout<Ink>, origin: [f32; 2], x0: f32, x1: f32, scale: f32) -> Option<[f32; 4]> {
+    let (_, paragraph) = edit.selected_rule()?;
+    let at = edit.display_index(edit.line_range(paragraph).start);
+    let line = layout.lines().find(|l| {
+        let r = l.text_range();
+        r.start == at || (r.start <= at && at < r.end)
+    })?;
+    let m = line.metrics();
+    Some([x0, origin[1] + m.block_min_coord * scale, (x1 - x0).max(0.0), (m.block_max_coord - m.block_min_coord) * scale])
+}
+
 /// Whether `looping`'s sampled value multiplies the element's opacity.
 pub(super) fn fades(looping: Option<rune_motion::LoopSpec>) -> bool {
     matches!(looping.map(|l| l.kind), Some(rune_motion::LoopKind::Opacity { .. } | rune_motion::LoopKind::OpacityCycle(_) | rune_motion::LoopKind::Sequence(_)))

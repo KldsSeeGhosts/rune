@@ -218,6 +218,7 @@ impl<S: 'static> Runtime<S> {
         };
         let single = self.node(&path).and_then(|n| n.input.as_ref()).is_some_and(|i| i.single_line);
         let layout = self.node(&path).and_then(|n| n.text_layout.clone());
+        let block_look = self.node(&path).and_then(|n| Some((n.text.as_ref()?.style.size, n.input.as_ref()?.block_style)));
         let s = self.env.scale;
         let scroll = self.input_scroll.get(&path).copied().unwrap_or(0.0);
         match step {
@@ -234,6 +235,12 @@ impl<S: 'static> Runtime<S> {
                 }
                 if let Some(l) = layout {
                     let h = hit(e, &l, x + scroll, y, s, single);
+                    if !shift && let Some((font_size, style)) = block_look
+                        && input_blocks::block_click(e, &l, h.caret, x + scroll, y, s, font_size, style)
+                    {
+                        one.commit = one.commit.instant();
+                        return true;
+                    }
                     if shift {
                         let anchor = e.anchor;
                         self.input_click.unit = Unit::Char;

@@ -20,6 +20,9 @@ pub use app_mark::AppMark;
 pub use block_data::{BlockAttributes, BlockKind};
 use block_data::BlockData;
 mod block_style;
+mod object_selection;
+pub use object_selection::EditorSelection;
+use object_selection::SelectionState;
 pub use block_style::BlockStyle;
 mod caret_motion;
 #[cfg(test)]
@@ -42,6 +45,8 @@ pub use logical::{BlockId, BlockRangeError, CodeAttributes, LogicalBlock};
 mod logical_tests;
 #[cfg(test)]
 mod transaction_tests;
+#[cfg(test)]
+mod object_selection_tests;
 mod replace;
 pub use model::{Block, MAX_LIST_LEVEL, Mark, MarkRange, ParagraphInfo, RichStyle};
 mod secure;
@@ -53,7 +58,7 @@ pub use transaction::{TransactionError, TransactionOptions};
 use transaction::{Capture, Rewrite};
 use typing::Typing;
 pub(crate) use history::History;
-use history::{EditKind, EditedTag, Group};
+use history::{EditKind, EditedTag, Group, MovementTag};
 
 #[derive(Clone, PartialEq)]
 pub struct TextEdit {
@@ -67,6 +72,7 @@ pub struct TextEdit {
     marks: Vec<MarkRange>,
     blocks: Vec<Block>,
     block_ids: Vec<BlockId>,
+    block_selection: SelectionState,
     block_data: Vec<BlockData>,
     /// Line indices (`> 0`) created by `Shift+Return` (`<br>`): indented with their block,
     /// without starting a new list marker or incrementing list numbering.
@@ -90,6 +96,7 @@ pub struct TextEdit {
     allowed_blocks: Option<u8>,
     /// Whether a user has edited the value since `replace_text`.
     edited_tag: EditedTag,
+    movement_tag: MovementTag,
 }
 
 impl std::fmt::Debug for TextEdit {
@@ -130,6 +137,7 @@ impl std::hash::Hash for TextEdit {
             self.blocks.hash(h);
             self.block_data.hash(h);
             self.block_ids.hash(h);
+            self.selection().hash(h);
         }
         self.soft_breaks.hash(h);
         self.typing.hash(h);
@@ -184,6 +192,7 @@ impl TextEdit {
             marks: Vec::new(),
             blocks: vec![Block::Paragraph; line_count],
             block_ids: (0..line_count).map(|_| BlockId::fresh()).collect(),
+            block_selection: SelectionState::Text,
             block_data: Vec::new(),
             soft_breaks: Vec::new(),
             typing: Typing::Inherited,
@@ -198,6 +207,7 @@ impl TextEdit {
             allowed_marks: None,
             allowed_blocks: None,
             edited_tag: EditedTag::default(),
+            movement_tag: MovementTag::default(),
         }
     }
 
@@ -325,6 +335,9 @@ impl TextEdit {
 
     /// Serialize the current selection (`self.range()`) to HTML, or `""` when the selection is empty.
     pub fn selected_html(&self) -> String {
+        if let Some((_, line)) = self.selected_rule() {
+            return html::serialize_html(&self.synced(), self.line_range(line));
+        }
         let (a, b) = self.range();
         if a == b || self.secure {
             return String::new();
@@ -438,13 +451,14 @@ impl TextEdit {
         self.marks.clear();
         self.blocks = vec![Block::Paragraph; line_count];
         self.block_ids = (0..line_count).map(|_| BlockId::fresh()).collect();
+        self.clear_block_selection();
         self.block_data.clear();
         self.soft_breaks.clear();
         self.typing = Typing::Inherited;
         self.cancel_composition();
         self.edited_tag = EditedTag(false);
         self.history = Arc::default();
-        self.rewrite = Rewrite::Canonical;
+        self.discard_rewrite();
         if self.group.is_open() {
             self.group = self.group_from_here();
         }
@@ -498,6 +512,7 @@ impl TextEdit {
     /// selection, clearing any pending typing style.
     pub fn set_caret(&mut self, byte: usize) {
         self.explicit_selection();
+        self.clear_block_selection();
         let b = Self::clamp_char_boundary(&self.text, byte);
         self.anchor = b;
         self.focus = b;
@@ -510,6 +525,7 @@ impl TextEdit {
     /// [`Mark::Pill`] grows to cover it.
     pub fn set_selection(&mut self, anchor: usize, focus: usize) {
         self.explicit_selection();
+        self.clear_block_selection();
         self.anchor = Self::clamp_char_boundary(&self.text, anchor);
         self.focus = Self::clamp_char_boundary(&self.text, focus);
         self.snap_to_pills();
@@ -655,6 +671,9 @@ impl TextEdit {
     }
 
     pub fn selected(&self) -> &str {
+        if let Some((_, line)) = self.selected_rule() {
+            return self.block_attributes(line).rule_source().unwrap_or("\u{fffc}");
+        }
         let (a, b) = self.range();
         &self.text[a..b]
     }

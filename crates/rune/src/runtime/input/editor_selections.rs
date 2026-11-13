@@ -1,67 +1,60 @@
-//! Selection notifications share one observer registry, outside the edit accessor.
+//! Selection notifications read committed input snapshots, never stale edit accessors.
 
 use super::*;
 
 #[derive(Clone, PartialEq, Eq)]
 struct Stamp {
-    anchor: usize,
-    focus: usize,
+    selection: crate::EditorSelection,
+    history: u64,
     composition: Option<(usize, Option<(usize, usize)>)>,
 }
 
 impl Stamp {
     fn of(edit: &crate::TextEdit) -> Self {
-        Self { anchor: edit.anchor, focus: edit.focus, composition: edit.preedit().map(|(s, c)| (s.len(), c)) }
+        Self { selection: edit.selection(), history: edit.history_movement(), composition: edit.preedit().map(|(s, c)| (s.len(), c)) }
     }
 }
 
 #[derive(Clone)]
 struct Field {
     path: String,
-    access: crate::el::EditFn,
+    stamp: Stamp,
     callback: crate::el::PressFn,
 }
 
 #[derive(Default)]
 pub(super) struct EditorSelections {
-    fields: Vec<Field>,
     observed: HashMap<String, Stamp>,
 }
 
 impl<S: 'static> Runtime<S> {
-    /// Refresh only when a view commits. Fields without callbacks add no per-input traversal.
-    pub(super) fn register_editor_selections(&mut self) {
+    /// Pick one changed, currently mounted input. Rebuild after its callback before choosing
+    /// another, since a callback can remove itself or a different observed input.
+    pub(super) fn next_editor_selection(&mut self, notified: &HashSet<String>) -> Option<(String, crate::el::PressFn)> {
         let mut fields = Vec::new();
         let mut active = HashSet::default();
         for (path, input) in self.nodes.iter().filter_map(|n| Some((&n.path, n.input.as_deref()?)))
             .chain(self.virtual_inputs.iter().map(|(p, i)| (p, i.as_ref())))
         {
-            let (Some(access), Some(callback)) = (&input.access, &input.selection_change) else { continue };
+            let (Some(_), Some(callback)) = (&input.access, &input.selection_change) else { continue };
             if input.edit.is_secure() || !active.insert(path.clone()) { continue; }
-            self.editor_selections.observed.entry(path.clone()).or_insert_with(|| Stamp::of(&input.edit));
-            fields.push(Field { path: path.clone(), access: access.clone(), callback: callback.clone() });
+            fields.push(Field { path: path.clone(), stamp: Stamp::of(&input.edit), callback: callback.clone() });
         }
         self.editor_selections.observed.retain(|path, _| active.contains(path));
-        self.editor_selections.fields = fields;
-    }
-
-    /// After each action, update or poll. A callback sees the final edit, not intermediary
-    /// accessor calls. Rewrites made by that callback settle in the same notification.
-    pub(super) fn notify_editor_selections(&mut self, tx: &mut Tx) -> bool {
-        if self.editor_selections.fields.is_empty() { return false; }
-        let fields = self.editor_selections.fields.clone();
-        let mut changed = false;
         for field in fields {
-            let edit = (field.access)(states!(self));
-            if edit.is_secure() { continue; }
-            let stamp = Stamp::of(edit);
-            if self.editor_selections.observed.get(&field.path) == Some(&stamp) { continue; }
-            self.editor_selections.observed.insert(field.path.clone(), stamp);
-            (field.callback)(states!(self), tx);
-            let stamp = Stamp::of((field.access)(states!(self)));
-            self.editor_selections.observed.insert(field.path, stamp);
-            changed = true;
+            let Some(previous) = self.editor_selections.observed.get(&field.path) else {
+                self.editor_selections.observed.insert(field.path, field.stamp);
+                continue;
+            };
+            if notified.contains(&field.path) {
+                // Callback-owned rewrites settle in the same notification transaction.
+                self.editor_selections.observed.insert(field.path, field.stamp);
+                continue;
+            }
+            if previous == &field.stamp { continue; }
+            self.editor_selections.observed.insert(field.path.clone(), field.stamp);
+            return Some((field.path, field.callback));
         }
-        changed
+        None
     }
 }

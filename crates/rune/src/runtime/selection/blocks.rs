@@ -1,0 +1,31 @@
+//! Default task/rule hit targets. These use the text layout, not overlay elements.
+
+use super::*;
+
+pub(super) fn block_click(
+    edit: &mut crate::TextEdit,
+    layout: &Layout<Ink>,
+    byte: usize,
+    x: f32,
+    y: f32,
+    scale: f32,
+    font_size: f32,
+    style: crate::BlockStyle,
+) -> bool {
+    let line = edit.line_of_byte(byte);
+    match edit.block_kind(line) {
+        crate::BlockKind::Rule => edit.select_rule_at(byte),
+        crate::BlockKind::Task { checked, .. } => {
+            let start = edit.display_index(edit.line_range(line).start);
+            let Some(first) = layout.lines().find(|l| l.text_range().start == start) else { return false };
+            let d = style.checkbox_size.max(0.0);
+            let left = edit.blocks()[line].indent_pt(font_size) - d - 5.0;
+            let top = first.metrics().baseline / scale - font_size * 0.34 - d * 0.5;
+            if x >= left && x <= left + d && y >= top && y <= top + d {
+                edit.set_task_checked(line, !checked);
+                true
+            } else { false }
+        }
+        _ => false,
+    }
+}

@@ -374,7 +374,6 @@ impl<S: 'static> Runtime<S> {
             }
             merge(&mut tx, one);
         }
-        if self.notify_editor_selections(&mut tx) { ran = true; self.dirty = true; }
         if self.commits == 0 && self.queue.iter().any(|a| matches!(a, Action::WindowFocus(_))) {
             self.commit(&Tx::default());
         }

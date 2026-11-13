@@ -168,3 +168,41 @@ fn a_panicking_transaction_rolls_back_document_history_and_detached_source() {
     e.redo();
     assert_eq!(e.text, "abX");
 }
+
+#[test]
+fn becoming_secure_during_a_transaction_never_restores_its_old_history() {
+    for plain_again in [false, true] {
+        let mut e = TextEdit::new("fixture");
+        e.insert("x");
+        e.undo();
+        let result = e.transact(TransactionOptions::Transient, |e| {
+            e.set_secure(true);
+            if plain_again { e.set_secure(false); }
+        });
+        assert_eq!(result, Err(TransactionError::Secure));
+        assert!(!e.has_history());
+        if e.is_secure() { assert_eq!(e.logical_blocks().count(), 0); }
+        e.set_secure(false);
+        e.redo();
+        assert_eq!(e.text, "fixture");
+        assert_eq!(e.logical_blocks().collect::<Vec<_>>(), e.logical_blocks().collect::<Vec<_>>());
+    }
+}
+
+#[test]
+fn a_panicking_transaction_does_not_restore_history_after_becoming_secure() {
+    let mut e = TextEdit::new("fixture");
+    e.insert("x");
+    e.undo();
+    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _ = e.transact(TransactionOptions::Recorded, |e| {
+            e.set_secure(true);
+            panic!("fixture");
+        });
+    }));
+    assert!(e.is_secure());
+    assert!(!e.has_history());
+    e.set_secure(false);
+    e.redo();
+    assert_eq!(e.text, "fixture");
+}

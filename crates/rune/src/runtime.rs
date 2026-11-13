@@ -226,6 +226,11 @@ mod editor_selections;
 #[cfg(test)]
 #[path = "runtime/input/editor_selection_tests.rs"]
 mod editor_selection_tests;
+#[cfg(test)]
+#[path = "runtime/input/rule_selection_tests.rs"]
+mod rule_selection_tests;
+#[path = "runtime/selection/blocks.rs"]
+mod input_blocks;
 #[path = "runtime/input/press_run.rs"]
 mod press_run;
 #[path = "runtime/input/press_repeat.rs"]

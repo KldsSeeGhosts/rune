@@ -107,6 +107,7 @@ impl<S: 'static> Runtime<S> {
                     let paragraph = input.edit.line_of_byte(input.edit.model_index(l.range.start));
                     let kind = input.edit.block_kind(paragraph);
                     let role = match kind {
+                        _ if paragraph >= 0x4000 => None,
                         crate::BlockKind::Heading { .. } => Some(Role::Heading),
                         crate::BlockKind::Task { .. } => Some(Role::CheckBox),
                         crate::BlockKind::Rule => Some(Role::Splitter),
@@ -119,7 +120,17 @@ impl<S: 'static> Runtime<S> {
                             match kind {
                                 crate::BlockKind::Heading { level } => block.set_level(level as usize),
                                 crate::BlockKind::Task { checked, .. } => {
+                                    let mut bounds = block.bounds().unwrap();
+                                    bounds.x0 -= (spec.cold.block_style.checkbox_size.max(0.0) + 5.0) as f64;
+                                    block.set_bounds(bounds);
                                     block.set_toggled(if checked { accesskit::Toggled::True } else { accesskit::Toggled::False });
+                                    if input.access.is_some() { block.add_action(Ak::Click); }
+                                }
+                                crate::BlockKind::Rule => {
+                                    let mut bounds = block.bounds().unwrap();
+                                    bounds.x1 = bounds.x0 + (n.local.w - n.inset[0] - n.inset[2]).max(0.0) as f64;
+                                    block.set_bounds(bounds);
+                                    block.set_selected(input.edit.selected_rule().is_some_and(|(_, p)| p == paragraph));
                                     if input.access.is_some() { block.add_action(Ak::Click); }
                                 }
                                 _ => {}
