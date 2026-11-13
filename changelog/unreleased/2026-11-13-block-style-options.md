@@ -1,0 +1,1 @@
+- `BlockStyle` can set checked checkbox fill and tick colors, heading line-height multipliers and text colors per level, and vertical rule margins. All new options default to unset, retaining the previous rendering. Rule margins contribute to text measurement, caret placement and atomic rule hit targets.

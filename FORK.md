@@ -317,7 +317,58 @@ Touched files:
 - `crates/rune/src/runtime/commit/block_views_tests.rs`
 - `changelog/unreleased/2026-11-13-block-view-field-focus.md`
 
+### R1/R3, optional block styling
+
+`R1/R3: add optional heading, checkbox and rule styling`
+
+`BlockStyle` adds six optional controls. `checkbox_checked_fill` colors the checked
+box's interior. `checkbox_mark_color` draws a two-stroke tick instead of the legacy
+inner square. Setting only a fill retains that square. The tick scales with the
+checkbox size and uses its stroke width.
+
+`heading_line_height` contains one optional unitless multiplier per level, relative
+to that heading's font size. `heading_color` contains one optional text color per
+level. Unset heights retain the field's existing ratio; unset colors inherit the
+text color. Non-positive or non-finite height multipliers inherit too.
+
+`rule_margin_top` and `rule_margin_bottom` reserve points above and below a rule.
+Unset, negative and non-finite margins mean zero. These gaps use the composite text
+layout, including intrinsic height, caret geometry and pointer hit testing.
+They add to block-view slots without inserting document bytes or changing history.
+All six controls default to unset. `BlockStyle::DEFAULT` is the const equivalent
+of `Default::default()`, shared by the text's empty cold record.
+
+The shaping methods moved unchanged from `text.rs` into `text/shaping.rs` before
+adding the internal line-height hook. The existing `Span` and `TextStyle` remain
+unchanged. Tests cover default layout-cache identity and legacy checkbox geometry,
+independent checkbox colors and tick segments, all heading levels, empty headings,
+rule margins on empty/final rules, widget-slot composition and margin hit targets.
+
+Touched files:
+
+- `crates/rune/src/edit/block_style.rs`
+- `crates/rune/src/el/text_spec.rs`
+- `crates/rune/src/text.rs`
+- `crates/rune/src/text/{block_layout,block_style_tests,composite,line_break,rich_layout,shaping}.rs`
+- `crates/rune/src/runtime/input/rule_selection_tests.rs`
+- `crates/rune/src/runtime/commit/flatten.rs`
+- `crates/rune/src/runtime/paint/helpers.rs`
+- `crates/rune/src/runtime/selection/{blocks,click}.rs`
+- `changelog/unreleased/2026-11-13-block-style-options.md`
+
 ## Rebase notes
+
+For optional block styling, retain the per-range heading-height hook in
+`text/shaping.rs::layout_keyed_heights` when merging upstream shaping changes.
+The no-override wrapper keeps its previous signature and cache key. Heading metrics
+belong in the shape key; rule gaps belong in both the break key and the leaf's
+measurement key in `runtime/commit/flatten.rs`. Keep margin accounting
+in `TextSpec::measured_height` and the rule hit-target expansion together with
+`line_break::break_lines_styled`. Do not reserve margins with painted padding alone.
+Keep heading separator font sizes with the line-height overrides, or a newline's
+different span box can enlarge the line. An invisible zero-width strut box gives
+the final empty paragraph its own metrics instead of the preceding newline's.
+It adds no bytes or caret stops and is not a pill or a widget slot.
 
 For block views, keep three hooks together:
 
@@ -413,9 +464,10 @@ screen readers, Windows or Linux. Exact per-mutation selection notifications rem
 the R4 gap described above. The example's source grammar handles one balanced bold
 region, not general Markdown parsing.
 
-The block-view change passes the required three-package suite, 3,153 tests passed
+The fork passes the required three-package suite, 3,162 tests passed
 and 76 ignored, including doctests, and `cargo check --workspace --all-targets`.
-All 24 block-view runtime tests also pass with `baseline-taffy`. The example has
+All 24 block-view runtime tests and 11 focused block-style/rule tests also pass
+with `baseline-taffy`. The styling change adds nine regression tests. The example has
 six passing tests with each layout engine. File-size and folder-shape checks have
 no errors. Repository-wide `cargo fmt --check` reports existing formatting drift;
 unrelated files have not been reformatted.

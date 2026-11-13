@@ -5,6 +5,9 @@ use super::*;
 #[cfg(test)]
 #[path = "composite_tests.rs"]
 mod composite_tests;
+#[cfg(test)]
+#[path = "block_style_tests.rs"]
+mod block_style_tests;
 
 /// How [`TextSystem::layout_rich_with`] lays out a paragraph. The default is
 /// [`layout_rich`](TextSystem::layout_rich): start-aligned, breaking only between words.
@@ -148,7 +151,7 @@ impl TextSystem {
         max_width: Option<f32>,
         align: Alignment,
     ) -> Rc<Layout<Ink>> {
-        if !spec.cold.block_slots.is_empty() {
+        if !spec.cold.block_slots.is_empty() || !spec.rule_gaps().is_empty() || !spec.heading_heights().is_empty() {
             return self.layout_composite(spec, &spec.cold.block_slots, scale, max_width, align);
         }
         let shape = spec.shape_key(scale);

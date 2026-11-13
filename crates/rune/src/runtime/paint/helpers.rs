@@ -105,8 +105,20 @@ pub(super) fn emit_block_decorations(
                     instances.push(rect_inst(r, color, 0.0, clip, fade));
                 }
                 if *checked {
-                    let pad = (stroke * 2.0).max(d * 0.2);
-                    instances.push(rect_inst([x + pad, y + pad, (d - 2.0 * pad).max(0.0), (d - 2.0 * pad).max(0.0)], color, 0.0, clip, fade));
+                    if let Some(fill) = style.checkbox_checked_fill {
+                        instances.push(rect_inst([x + stroke, y + stroke, (d - 2.0 * stroke).max(0.0), (d - 2.0 * stroke).max(0.0)],
+                            premul(fill, o, srgb), 0.0, clip, fade));
+                    }
+                    if let Some(mark) = style.checkbox_mark_color {
+                        let color = premul(mark, o, srgb);
+                        let points = [[x + d * 0.20, y + d * 0.50], [x + d * 0.42, y + d * 0.72], [x + d * 0.80, y + d * 0.25]];
+                        for pair in points.windows(2) {
+                            instances.push(segment_inst(pair[0], pair[1], stroke, color, clip, fade));
+                        }
+                    } else {
+                        let pad = (stroke * 2.0).max(d * 0.2);
+                        instances.push(rect_inst([x + pad, y + pad, (d - 2.0 * pad).max(0.0), (d - 2.0 * pad).max(0.0)], color, 0.0, clip, fade));
+                    }
                 }
                 true
             }
@@ -352,5 +364,16 @@ pub(super) fn rect_inst(rect: [f32; 4], fill: [f32; 4], radius: f32, clip: [f32;
         uv: [0.0; 4],
         clip,
         fade: crate::render::pack_fade(fade, clip, clip),
+    }
+}
+
+fn segment_inst(a: [f32; 2], b: [f32; 2], width: f32, fill: [f32; 4], clip: [f32; 4], fade: [f32; 4]) -> Instance {
+    let pad = (width * 0.5).max(0.5) + 1.0;
+    let (x, y) = (a[0].min(b[0]) - pad, a[1].min(b[1]) - pad);
+    Instance {
+        rect: [x, y, a[0].max(b[0]) + pad - x, a[1].max(b[1]) + pad - y],
+        radii: [a[0], a[1], b[0], b[1]],
+        fill, border: [0.0; 4], params: [width * 0.5, KIND_SEGMENT, 1.0, 1.0],
+        uv: [0.0; 4], clip, fade: crate::render::pack_fade(fade, clip, clip),
     }
 }

@@ -121,15 +121,7 @@ impl Empty for TextCold {
         blocks: Vec::new(),
         block_kinds: Vec::new(),
         block_slots: Vec::new(),
-        block_style: crate::edit::BlockStyle {
-            heading_scale: [2.0, 1.5, 1.25, 1.125, 1.0, 1.0],
-            heading_weight: [600.0; 6],
-            checkbox_size: 12.0,
-            checkbox_stroke: 1.0,
-            checkbox_color: None,
-            rule_thickness: 1.0,
-            rule_color: None,
-        },
+        block_style: crate::edit::BlockStyle::DEFAULT,
         soft_breaks: Vec::new(),
         pills: Vec::new(),
         pill_colors: None,
@@ -225,7 +217,7 @@ impl TextSpec {
     /// [`crate::text::shape_key`] of this text in its direction.
     pub(crate) fn fresh_shape_key(&self, scale: f32) -> u64 {
         let key = crate::text::shape_key(&self.content, &self.spans, self.style, scale, self.wrap_anywhere, &self.cold.pills);
-        crate::text::directed(key, self.base())
+        crate::text::directed(self.heading_height_key(key), self.base())
     }
 
     /// The paragraph direction it lays out in.

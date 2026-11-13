@@ -226,7 +226,7 @@ impl<S: 'static> Runtime<S> {
         let (height, custom_markers) = self.node(&path).and_then(|n| {
             let spec = n.text.as_ref()?;
             let layout = n.text_layout.as_ref()?;
-            (!spec.cold.block_slots.is_empty()).then(|| (
+            (!spec.cold.block_slots.is_empty() || spec.cold.block_style.rule_margins() != [0.0; 2]).then(|| (
                 Some(spec.measured_height(layout, self.env.scale)),
                 spec.cold.block_slots.iter().filter(|s| s.position == crate::text::SlotPosition::Leading).map(|s| s.paragraph).collect::<Vec<_>>(),
             ))

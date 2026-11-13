@@ -13,6 +13,17 @@ pub(super) fn block_click(
     style: crate::BlockStyle,
     custom_marker: bool,
 ) -> bool {
+    let [before, after] = style.rule_margins();
+    if before > 0.0 || after > 0.0 {
+        for visual in layout.lines() {
+            let at = edit.model_index(visual.text_range().start);
+            if edit.block_kind(edit.line_of_byte(at)) != crate::BlockKind::Rule { continue; }
+            let m = visual.metrics();
+            if y >= m.block_min_coord / scale - before && y <= m.block_max_coord / scale + after {
+                return edit.select_rule_at(at);
+            }
+        }
+    }
     let line = edit.line_of_byte(byte);
     match edit.block_kind(line) {
         crate::BlockKind::Rule => edit.select_rule_at(byte),

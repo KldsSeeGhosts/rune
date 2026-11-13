@@ -31,18 +31,21 @@ impl TextSystem {
         &mut self, spec: &crate::el::TextSpec, slots: &[BlockSlot], scale: f32,
         width: Option<f32>, align: Alignment,
     ) -> Rc<Layout<Ink>> {
-        let base = self.layout_keyed(spec.shape_key(scale), &spec.content, &spec.spans,
-            &spec.cold.blocks, &spec.cold.pills, spec.style, scale, width, align,
-            spec.wrap_anywhere, !spec.redacted, spec.base());
-        if slots.is_empty() { return base; }
+        let heights = spec.heading_heights();
+        let tail = (!heights.is_empty()).then(|| spec.heading_tail()).flatten();
         let shape = spec.shape_key(scale).unwrap_or_else(|| spec.fresh_shape_key(scale));
-        let key = hash::break_key(shape ^ slots_key(slots), width, align, Some(&spec.cold.blocks));
+        let base = self.layout_keyed_heights(Some(shape), &spec.content, &spec.spans,
+            &spec.cold.blocks, &spec.cold.pills, spec.style, scale, width, align,
+            spec.wrap_anywhere, !spec.redacted, spec.base(), &heights, tail);
+        let gaps = spec.rule_gaps();
+        if slots.is_empty() && gaps.is_empty() { return base; }
+        let key = hash::break_key(shape ^ slots_key(slots) ^ block_layout::gaps_key(&gaps), width, align, Some(&spec.cold.blocks));
         if !spec.redacted && let Some(e) = self.layouts.get_mut(&key) {
             e.used = self.generation;
             return e.value.clone();
         }
         let mut layout = (*base).clone();
-        line_break::break_lines_with_slots(&mut layout, &spec.cold.blocks, spec.style.size, scale, width, slots);
+        line_break::break_lines_styled(&mut layout, &spec.cold.blocks, spec.style.size, scale, width, slots, &gaps);
         layout.align(align, AlignmentOptions::default());
         let layout = Rc::new(layout);
         if !spec.redacted {
@@ -56,9 +59,11 @@ impl crate::el::TextSpec {
     /// Parley's height sums line heights, not gaps added by `set_line_y`. Include exactly
     /// the reserved gaps here; ordinary fields keep the upstream measurement byte for byte.
     pub(crate) fn measured_height(&self, layout: &Layout<Ink>, scale: f32) -> f32 {
-        let base = spec_height(layout, self.style, scale, self.exact_lines);
-        if self.cold.block_slots.is_empty() { return base; }
-        let mut extra = 0.0;
+        let base = if !self.heading_heights().is_empty() && layout.height() > 0.0 {
+            if self.exact_lines { (layout.height() * 64.0).round() / 64.0 } else { layout.height().ceil() }
+        } else { spec_height(layout, self.style, scale, self.exact_lines) };
+        let mut extra = self.rule_gaps().iter().map(|g| (g.before + g.after) * scale).sum::<f32>();
+        if self.cold.block_slots.is_empty() { return base + extra; }
         let mut paragraph = 0;
         let mut first = true;
         for line in layout.lines() {

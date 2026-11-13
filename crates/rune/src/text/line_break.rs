@@ -18,6 +18,13 @@ pub(super) fn break_lines_with_slots(
     layout: &mut Layout<Ink>, blocks: &[crate::edit::Block], font_size: f32,
     scale: f32, max_width: Option<f32>, slots: &[BlockSlot],
 ) {
+    break_lines_styled(layout, blocks, font_size, scale, max_width, slots, &[]);
+}
+
+pub(super) fn break_lines_styled(
+    layout: &mut Layout<Ink>, blocks: &[crate::edit::Block], font_size: f32,
+    scale: f32, max_width: Option<f32>, slots: &[BlockSlot], gaps: &[block_layout::ParagraphGap],
+) {
     let pills = layout.inline_boxes().filter(|b| b.id & PILL_BOX != 0).count() / 2;
     // `(para_idx, line_in_para)` and the room it gets instead: less to break before a chip, or
     // more to keep a chip with its label. Paragraphs break independently at `\n`, so one pass
@@ -25,7 +32,7 @@ pub(super) fn break_lines_with_slots(
     let mut caps: Vec<((usize, usize), f32)> = Vec::new();
     let mut lines_meta = Vec::new();
     for _ in 0..=2 * pills {
-        break_lines_capped(layout, blocks, font_size, scale, max_width, slots, &caps, &mut lines_meta);
+        break_lines_capped(layout, blocks, font_size, scale, max_width, slots, gaps, &caps, &mut lines_meta);
         if max_width.is_none() || pills == 0 || !collect_misplaced_pills(layout, &lines_meta, &mut caps) {
             return;
         }
@@ -41,6 +48,7 @@ fn break_lines_capped(
     scale: f32,
     max_width: Option<f32>,
     slots: &[BlockSlot],
+    gaps: &[block_layout::ParagraphGap],
     caps: &[((usize, usize), f32)],
     out: &mut Vec<((usize, usize), f32)>,
 ) {
@@ -51,6 +59,11 @@ fn break_lines_capped(
     let (mut para_idx, mut line_in_para) = (0usize, 0usize);
     while !breaker.is_done() {
         let blk = blocks.get(para_idx).copied().unwrap_or(crate::edit::Block::Paragraph);
+        let gap = gaps.iter().find(|g| g.paragraph == para_idx);
+        if line_in_para == 0 && let Some(gap) = gap {
+            let y = breaker.state().line_y() + f64::from(gap.before * scale);
+            breaker.state_mut().set_line_y(y);
+        }
         let slot = slots.iter().find(|s| s.paragraph == para_idx);
         let leading = slot.filter(|s| s.position == SlotPosition::Leading);
         let base_indent = (blk.indent_pt(font_size) * scale).round();
@@ -78,6 +91,10 @@ fn break_lines_capped(
                     breaker.state_mut().set_line_y(y);
                 }
                 if data.reason == parley::BreakReason::Explicit {
+                    if let Some(gap) = gap {
+                        let y = breaker.state().line_y() + f64::from(gap.after * scale);
+                        breaker.state_mut().set_line_y(y);
+                    }
                     para_idx += 1;
                     line_in_para = 0;
                 } else {
