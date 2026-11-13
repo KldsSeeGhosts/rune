@@ -2,6 +2,10 @@
 //! option, block-indented and per-spec variants, all over `layout_blocks_inner`.
 use super::*;
 
+#[cfg(test)]
+#[path = "composite_tests.rs"]
+mod composite_tests;
+
 /// How [`TextSystem::layout_rich_with`] lays out a paragraph. The default is
 /// [`layout_rich`](TextSystem::layout_rich): start-aligned, breaking only between words.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -144,6 +148,9 @@ impl TextSystem {
         max_width: Option<f32>,
         align: Alignment,
     ) -> Rc<Layout<Ink>> {
+        if !spec.cold.block_slots.is_empty() {
+            return self.layout_composite(spec, &spec.cold.block_slots, scale, max_width, align);
+        }
         let shape = spec.shape_key(scale);
         self.layout_keyed(shape, &spec.content, &spec.spans, &spec.cold.blocks, &spec.cold.pills, spec.style, scale, max_width, align, spec.wrap_anywhere, !spec.redacted, spec.base())
     }

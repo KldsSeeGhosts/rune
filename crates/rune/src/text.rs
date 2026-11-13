@@ -30,6 +30,8 @@ mod atlas_fill;
 pub(crate) use atlas_fill::QueuedFill;
 mod case;
 mod color_icon;
+mod composite;
+pub(crate) use composite::{BlockSlot, SlotPosition};
 mod cursor;
 mod decorations;
 mod families;

@@ -1,0 +1,1 @@
+- Rich input layout can reserve measured header and leading widget slots without inserting editable text. Slot dimensions participate in the line-breaking cache, and input measurement includes reserved gaps. Inputs without slots retain their original layout and measurement.

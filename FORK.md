@@ -186,6 +186,25 @@ Touched files:
 - `crates/rune/examples/markdown_composer/tests.rs`
 - `changelog/unreleased/2026-11-12-atomic-rules.md`
 
+### R3, composite text geometry
+
+`R3: reserve block-widget slots in composite text layout`
+
+The internal slot table carries `BlockId`, displayed paragraph, position and measured
+dimensions. Parley's line breaker reserves header gaps and leading insets in one
+document, without synthetic characters or selection boxes. The cache includes the
+slot table and width. Parley sums line heights without reserved gaps; Rune's input
+measurement adds those gaps explicitly. An empty table takes the original path,
+including the same cached layout object, dimensions and line geometry.
+
+Touched files:
+
+- `crates/rune/src/text.rs`
+- `crates/rune/src/text/{composite,composite_tests,line_break,rich_layout}.rs`
+- `crates/rune/src/el/text_spec.rs`
+- `crates/rune/src/runtime/commit/text_layout.rs`
+- `changelog/unreleased/2026-11-12-composite-input-layout.md`
+
 #### Block views are not implemented
 
 There is no `InputBlockView` API and no in-editor language header control.

@@ -90,6 +90,7 @@ pub(crate) struct TextCold {
     pub(crate) blocks: Vec<crate::edit::Block>,
     pub(crate) block_kinds: Vec<crate::edit::BlockKind>,
     pub(crate) block_style: crate::edit::BlockStyle,
+    pub(crate) block_slots: Vec<crate::text::BlockSlot>,
     /// Line indices (`> 0`) created by `Shift+Return` (`<br>`).
     pub(crate) soft_breaks: Vec<u32>,
     /// [`Mark::Pill`](crate::Mark::Pill) chips in `content`, sorted.
@@ -119,6 +120,7 @@ impl Empty for TextCold {
         highlights: Vec::new(),
         blocks: Vec::new(),
         block_kinds: Vec::new(),
+        block_slots: Vec::new(),
         block_style: crate::edit::BlockStyle {
             heading_scale: [2.0, 1.5, 1.25, 1.125, 1.0, 1.0],
             heading_weight: [600.0; 6],

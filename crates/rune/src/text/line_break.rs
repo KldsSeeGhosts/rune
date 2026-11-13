@@ -11,6 +11,13 @@ pub(super) fn break_lines_with_blocks(
     scale: f32,
     max_width: Option<f32>,
 ) {
+    break_lines_with_slots(layout, blocks, font_size, scale, max_width, &[]);
+}
+
+pub(super) fn break_lines_with_slots(
+    layout: &mut Layout<Ink>, blocks: &[crate::edit::Block], font_size: f32,
+    scale: f32, max_width: Option<f32>, slots: &[BlockSlot],
+) {
     let pills = layout.inline_boxes().filter(|b| b.id & PILL_BOX != 0).count() / 2;
     // `(para_idx, line_in_para)` and the room it gets instead: less to break before a chip, or
     // more to keep a chip with its label. Paragraphs break independently at `\n`, so one pass
@@ -18,7 +25,7 @@ pub(super) fn break_lines_with_blocks(
     let mut caps: Vec<((usize, usize), f32)> = Vec::new();
     let mut lines_meta = Vec::new();
     for _ in 0..=2 * pills {
-        break_lines_capped(layout, blocks, font_size, scale, max_width, &caps, &mut lines_meta);
+        break_lines_capped(layout, blocks, font_size, scale, max_width, slots, &caps, &mut lines_meta);
         if max_width.is_none() || pills == 0 || !collect_misplaced_pills(layout, &lines_meta, &mut caps) {
             return;
         }
@@ -33,6 +40,7 @@ fn break_lines_capped(
     font_size: f32,
     scale: f32,
     max_width: Option<f32>,
+    slots: &[BlockSlot],
     caps: &[((usize, usize), f32)],
     out: &mut Vec<((usize, usize), f32)>,
 ) {
@@ -43,7 +51,14 @@ fn break_lines_capped(
     let (mut para_idx, mut line_in_para) = (0usize, 0usize);
     while !breaker.is_done() {
         let blk = blocks.get(para_idx).copied().unwrap_or(crate::edit::Block::Paragraph);
-        let indent = (blk.indent_pt(font_size) * scale).round();
+        let slot = slots.iter().find(|s| s.paragraph == para_idx);
+        let leading = slot.filter(|s| s.position == SlotPosition::Leading);
+        let indent = (blk.indent_pt(font_size) * scale).round()
+            .max(leading.map_or(0.0, |s| s.width * scale));
+        if line_in_para == 0 && let Some(s) = slot.filter(|s| s.position == SlotPosition::Header) {
+            let y = breaker.state().line_y() + f64::from(s.height * scale);
+            breaker.state_mut().set_line_y(y);
+        }
         let right_pad = if blk == crate::edit::Block::Code { indent } else { 0.0 };
         let line_max = max_width
             .map_or(f32::MAX, |w| (w - indent - right_pad).max(1.0))
@@ -57,6 +72,10 @@ fn break_lines_capped(
         breaker.state_mut().set_line_max_advance(capped);
         match breaker.break_next() {
             Some(parley::YieldData::LineBreak(data)) => {
+                if line_in_para == 0 && let Some(s) = leading {
+                    let y = data.line_y_end.max(data.line_y_start + f64::from(s.height * scale));
+                    breaker.state_mut().set_line_y(y);
+                }
                 if data.reason == parley::BreakReason::Explicit {
                     para_idx += 1;
                     line_in_para = 0;
