@@ -1,0 +1,1 @@
+- Rich editors can enumerate and edit logical blocks with stable `BlockId`s and exact `CodeAttributes`, including empty fences and absent closing fences. Adjacent code blocks remain distinct through edits, history, HTML and rich paste; pasted blocks receive new identities.

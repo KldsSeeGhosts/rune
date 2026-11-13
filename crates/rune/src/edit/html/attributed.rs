@@ -14,6 +14,7 @@ pub(super) fn serialize(edit: &TextEdit, range: Range<usize>) -> String {
         let kind = edit.block_kind(p.index);
         let mut data = edit.block_data.get(p.index).cloned().unwrap_or_default();
         data.kind = Some(kind);
+        data.id = edit.block_ids.get(p.index).copied();
         let tag = match kind {
             BlockKind::Heading { level: 1 } => "h1",
             BlockKind::Heading { level: 2 } => "h2",
@@ -53,5 +54,6 @@ pub(super) fn read(attrs: &str) -> Option<BlockData> {
     let encoded = extract_attr(attrs, "data-rune-line")?;
     let mut data: BlockData = serde_json::from_str(&encoded).ok()?;
     data.kind = data.kind.map(BlockKind::normalized);
+    data.id = data.id.and_then(crate::edit::BlockId::imported);
     Some(data)
 }

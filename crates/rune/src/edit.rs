@@ -32,6 +32,10 @@ mod keys;
 pub use keys::{Key, KeyEvent, KeySide, Modifier, Mods};
 mod marks;
 mod model;
+mod logical;
+pub use logical::{BlockId, BlockRangeError, CodeAttributes, LogicalBlock};
+#[cfg(test)]
+mod logical_tests;
 mod replace;
 pub use model::{Block, MAX_LIST_LEVEL, Mark, MarkRange, ParagraphInfo, RichStyle};
 mod secure;
@@ -42,7 +46,7 @@ use typing::Typing;
 pub(crate) use history::History;
 use history::{EditKind, EditedTag, Group};
 
-#[derive(Clone, Default, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct TextEdit {
     /// Use `replace_text` to replace a secret without leaving its old allocation behind.
     pub text: String,
@@ -53,6 +57,7 @@ pub struct TextEdit {
     pub focused: bool,
     marks: Vec<MarkRange>,
     blocks: Vec<Block>,
+    block_ids: Vec<BlockId>,
     block_data: Vec<BlockData>,
     /// Line indices (`> 0`) created by `Shift+Return` (`<br>`): indented with their block,
     /// without starting a new list marker or incrementing list numbering.
@@ -113,6 +118,7 @@ impl std::hash::Hash for TextEdit {
         if !self.secure {
             self.blocks.hash(h);
             self.block_data.hash(h);
+            self.block_ids.hash(h);
         }
         self.soft_breaks.hash(h);
         self.typing.hash(h);
@@ -127,6 +133,10 @@ impl Drop for TextEdit {
         self.text.zeroize();
         self.cancel_composition();
     }
+}
+
+impl Default for TextEdit {
+    fn default() -> Self { Self::new("") }
 }
 
 /// What an edit asks of the host.
@@ -162,6 +172,7 @@ impl TextEdit {
             focused: false,
             marks: Vec::new(),
             blocks: vec![Block::Paragraph; line_count],
+            block_ids: (0..line_count).map(|_| BlockId::fresh()).collect(),
             block_data: Vec::new(),
             soft_breaks: Vec::new(),
             typing: Typing::Inherited,
@@ -186,6 +197,7 @@ impl TextEdit {
         edit.blocks = blocks;
         edit.clamp_list_levels();
         edit.sync_invariants();
+        edit.group_legacy_blocks();
         edit
     }
 
@@ -333,6 +345,7 @@ impl TextEdit {
         self.blocks = blocks;
         self.clamp_list_levels();
         self.sync_invariants();
+        self.group_legacy_blocks();
     }
 
     /// Line indices (`> 0`) created by `Shift+Return` (`<br>`) rather than a hard paragraph break.
@@ -411,6 +424,7 @@ impl TextEdit {
         self.focus = self.anchor;
         self.marks.clear();
         self.blocks = vec![Block::Paragraph; line_count];
+        self.block_ids = (0..line_count).map(|_| BlockId::fresh()).collect();
         self.block_data.clear();
         self.soft_breaks.clear();
         self.typing = Typing::Inherited;

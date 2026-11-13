@@ -228,7 +228,9 @@ fn parse_style_marks(style: &str, add: &mut Vec<Mark>, remove: &mut Vec<Mark>) {
 
 /// Serializes byte range `range` of `edit` to HTML.
 pub(crate) fn serialize_html(edit: &TextEdit, range: Range<usize>) -> String {
-    if !edit.block_data.is_empty() {
+    if !edit.block_data.is_empty() || edit.blocks.windows(2).enumerate().any(|(i, b)| {
+        b == [Block::Code, Block::Code] && edit.block_ids[i] != edit.block_ids[i + 1]
+    }) {
         return attributed::serialize(edit, range);
     }
     let start = range.start.min(edit.text.len());

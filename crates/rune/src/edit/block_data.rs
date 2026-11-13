@@ -63,6 +63,7 @@ pub struct BlockAttributes {
     quote_prefix: Option<String>,
     heading_space: Option<String>,
     rule_source: Option<String>,
+    code: Option<CodeAttributes>,
 }
 
 macro_rules! source_attribute {
@@ -86,10 +87,18 @@ source_attribute!(quote_prefix, with_quote_prefix);
 source_attribute!(heading_space, with_heading_space);
 source_attribute!(rule_source, with_rule_source);
 
+impl BlockAttributes {
+    pub fn code(&self) -> Option<&CodeAttributes> { self.code.as_ref() }
+    pub fn with_code(mut self, code: CodeAttributes) -> Self { self.code = Some(code); self }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub(super) struct BlockData {
     pub(super) kind: Option<BlockKind>,
     pub(super) attributes: BlockAttributes,
+    /// Only used while importing/exporting HTML. The live model owns `block_ids`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) id: Option<BlockId>,
 }
 
 impl BlockData {
@@ -99,12 +108,13 @@ impl BlockData {
             &a.indent, &a.marker, &a.space, &a.marker_space, &a.content_space,
             &a.quote_prefix, &a.heading_space, &a.rule_source,
         ].iter().filter_map(|s| s.as_ref()).map(|s| s.len()).sum::<usize>()
+            + a.code.as_ref().map_or(0, CodeAttributes::bytes)
     }
 }
 
 static EMPTY: BlockAttributes = BlockAttributes {
     indent: None, marker: None, space: None, marker_space: None, content_space: None,
-    quote_prefix: None, heading_space: None, rule_source: None,
+    quote_prefix: None, heading_space: None, rule_source: None, code: None,
 };
 
 impl TextEdit {
@@ -127,7 +137,10 @@ impl TextEdit {
         self.break_history_group();
         let before = self.snapshot();
         self.block_data.resize(self.blocks.len(), BlockData::default());
-        self.block_data[line].attributes = attributes;
+        let id = self.block_ids[line];
+        for (i, &block_id) in self.block_ids.iter().enumerate() {
+            if block_id == id { self.block_data[i].attributes = attributes.clone(); }
+        }
         self.record_change(before, EditKind::Other);
     }
 
@@ -143,6 +156,7 @@ impl TextEdit {
         self.block_data.resize(self.blocks.len(), BlockData::default());
         self.block_data[line].kind = Some(kind);
         self.blocks[line] = kind.legacy();
+        self.repair_block_ids();
         self.normalize_marks();
         self.record_change(before, EditKind::Other);
     }

@@ -9,6 +9,7 @@ struct TagFrame {
     tag: String,
     added_marks: Vec<Mark>,
     suppressed_marks: Vec<Mark>,
+    code_start: Option<usize>,
 }
 
 pub(crate) fn parse_html(html: &str) -> TextEdit {
@@ -17,6 +18,7 @@ pub(crate) fn parse_html(html: &str) -> TextEdit {
     let mut blocks: Vec<Block> = vec![Block::Paragraph];
     let mut soft_breaks: Vec<u32> = Vec::new();
     let mut authored_lines = Vec::new();
+    let mut code_groups = Vec::new();
     // Authored line text is already normalized. Unlike arbitrary HTML, keep its whitespace.
     let mut authored_tag: Option<String> = None;
 
@@ -357,6 +359,7 @@ pub(crate) fn parse_html(html: &str) -> TextEdit {
                     tag: tag.clone(),
                     added_marks: Vec::new(),
                     suppressed_marks: Vec::new(),
+                    code_start: (tag == "pre" && in_pre == 1).then_some(blocks.len() - 1),
                 };
 
                 for rem in to_suppress {
@@ -404,6 +407,7 @@ pub(crate) fn parse_html(html: &str) -> TextEdit {
                 if let Some(frame_idx) = open.then(|| stack.iter().rposition(|f| f.tag == tag)).flatten() {
                     while stack.len() > frame_idx {
                         let frame = stack.pop().unwrap();
+                        if let Some(start) = frame.code_start { code_groups.push((start, blocks.len() - 1)); }
                         if authored_tag.as_deref() == Some(frame.tag.as_str()) { authored_tag = None; }
                         if let Some(n) = open_tags.get_mut(&frame.tag) {
                             *n -= 1;
@@ -595,12 +599,23 @@ pub(crate) fn parse_html(html: &str) -> TextEdit {
 
     let mut edit = TextEdit::from_parts(text, marks, blocks);
     edit.soft_breaks = soft_breaks;
+    if let Some(start) = stack.iter().find_map(|f| f.code_start) {
+        code_groups.push((start, edit.blocks.len() - 1));
+    }
+    for (first, last) in code_groups {
+        let id = crate::edit::BlockId::fresh();
+        let len = edit.block_ids.len();
+        if first < len { edit.block_ids[first..=last.min(len - 1)].fill(id); }
+    }
     if !authored_lines.is_empty() {
         edit.block_data.resize(edit.blocks.len(), Default::default());
-        for (line, data) in authored_lines {
+        for (line, mut data) in authored_lines {
+            if let Some(id) = data.id.take()
+                && let Some(slot) = edit.block_ids.get_mut(line) { *slot = id; }
             if let Some(slot) = edit.block_data.get_mut(line) { *slot = data; }
         }
         edit.sync_invariants();
+        edit.repair_block_ids();
     }
     edit
 }

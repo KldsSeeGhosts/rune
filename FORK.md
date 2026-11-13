@@ -46,6 +46,38 @@ Touched files:
 - `crates/rune/src/lib.rs`
 - `changelog/unreleased/2026-11-12-authored-blocks.md`
 
+### R2, logical blocks
+
+`R2: preserve logical block identities and exact code source`
+
+Adds `BlockId`, `LogicalBlock`, `BlockRangeError`, and `CodeAttributes`.
+`logical_blocks()` enumerates content ranges without a separator from the next
+block, including empty ranges. `set_logical_block` creates a fresh identity;
+`update_logical_block` retains one. Setters require whole physical lines.
+Multiline non-code logical blocks use the existing soft-break representation.
+
+Code line splits retain their logical identity. Hard paragraph splits create
+new identities. Joins retain the same left/right survivor as authored attributes.
+Disjoint remainders after a structural replacement receive distinct ids.
+Updating per-line source on an existing logical block updates all its lines.
+Code source retains the exact opening fence, complete info string and optional
+closing source. `None` and `Some("")` are different closing states.
+
+Legacy documents keep the existing HTML output unless they use authored/logical
+setters or contain separate adjacent code blocks. That legacy HTML allocates fresh
+ids on import. Authored HTML retains ids, including on empty lines. Rich paste
+always remaps ids so copying a fence does not alias the original block.
+Separate legacy `<pre>` elements also import as separate logical code blocks.
+
+Additional touched files:
+
+- `crates/rune/src/edit/logical.rs`
+- `crates/rune/src/edit/logical_tests.rs`
+- `changelog/unreleased/2026-11-12-logical-blocks.md`
+
+R2 also touches the R1 model, replacement, history, HTML, rich-paste, secure-mode,
+and export hooks listed above.
+
 ## Rebase notes
 
 The replacement engine and HTML parser were extracted without changing their
@@ -56,6 +88,11 @@ When upstream changes these functions, transplant its implementation into
 - `TextEdit` owns `block_data`. Include it in construction, reset, hashing,
   secure-mode clearing and history snapshots. Snapshot byte accounting includes
   owned source strings.
+- R2 also owns parallel `block_ids`. Map them before the replacement engine mutates
+  text. A code/soft split shares its id; a hard paragraph split allocates one.
+  Snapshots include ids and their byte cost. Structural setters repair disjoint ids.
+  HTML's line record carries the persisted id, but the live identity table owns it.
+  Rich paste remaps ids with one map per pasted fragment, not one map per line.
 - `apply_text_and_attr_replace` skips the plain fast path when authored data exists
   and calls `map_block_data` before changing the legacy blocks.
 - `sync_invariants` reconciles the authored data after legacy blocks. Legacy setters

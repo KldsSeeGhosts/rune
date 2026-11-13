@@ -493,6 +493,8 @@ impl TextEdit {
                 }
             }
         }
+        self.paste_block_ids(&frag, line_idx,
+            orig_block == Block::Paragraph && (line_was_empty || (frag_lines > 1 && ins_at == line_range.start)));
 
         // Add `frag.marks` shifted by `ins_at`.
         for m in &frag.marks {

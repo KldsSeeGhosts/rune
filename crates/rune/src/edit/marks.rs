@@ -11,6 +11,7 @@ impl TextEdit {
         if self.secure {
             self.marks.clear();
             self.blocks.clear();
+            self.block_ids.clear();
             self.block_data.clear();
             self.soft_breaks.clear();
             self.typing = Typing::Inherited;
@@ -30,6 +31,7 @@ impl TextEdit {
             }
         }
         self.sync_block_data();
+        self.sync_block_ids();
         self.soft_breaks.sort_unstable();
         self.soft_breaks.dedup();
         self.soft_breaks.retain(|&idx| idx > 0 && (idx as usize) < line_count);
@@ -453,7 +455,10 @@ impl TextEdit {
         }
         if block == Block::Code {
             self.typing = Typing::Inherited;
+            let id = self.block_ids[first];
+            self.block_ids[first..=last].fill(id);
         }
+        self.repair_block_ids();
         self.normalize_marks();
         self.record_change(before, EditKind::Other);
     }
@@ -487,7 +492,10 @@ impl TextEdit {
             }
             if block == Block::Code {
                 self.typing = Typing::Inherited;
+                let id = self.block_ids[first];
+                self.block_ids[first..=last].fill(id);
             }
+            self.repair_block_ids();
             self.normalize_marks();
             self.record_change(before, EditKind::Other);
         }
@@ -514,6 +522,7 @@ impl TextEdit {
             }
         }
         self.sync_block_data();
+        self.repair_block_ids();
         self.record_change(before, EditKind::Other);
         true
     }
@@ -539,6 +548,7 @@ impl TextEdit {
             }
         }
         self.sync_block_data();
+        self.repair_block_ids();
         self.record_change(before, EditKind::Other);
         true
     }

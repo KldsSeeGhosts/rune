@@ -15,6 +15,7 @@ pub(super) struct Snapshot {
     focus: usize,
     marks: Vec<MarkRange>,
     blocks: Vec<Block>,
+    block_ids: Vec<BlockId>,
     block_data: Vec<BlockData>,
     soft_breaks: Vec<u32>,
 }
@@ -25,6 +26,7 @@ impl Snapshot {
             && self.marks == other.marks
             && self.blocks == other.blocks
             && self.block_data == other.block_data
+            && self.block_ids == other.block_ids
             && self.soft_breaks == other.soft_breaks
     }
 }
@@ -82,6 +84,7 @@ impl Change {
             + (self.before.marks.len() + self.after.marks.len()) * std::mem::size_of::<MarkRange>()
             + (self.before.blocks.len() + self.after.blocks.len()) * std::mem::size_of::<Block>()
             + self.before.block_data.iter().chain(&self.after.block_data).map(BlockData::bytes).sum::<usize>()
+            + (self.before.block_ids.len() + self.after.block_ids.len()) * std::mem::size_of::<BlockId>()
             + (self.before.soft_breaks.len() + self.after.soft_breaks.len()) * std::mem::size_of::<u32>()
     }
 }
@@ -184,6 +187,7 @@ impl TextEdit {
             focus: self.focus,
             marks: self.marks.clone(),
             blocks: self.blocks.clone(),
+            block_ids: self.block_ids.clone(),
             block_data: self.block_data.clone(),
             soft_breaks: self.soft_breaks.clone(),
         }
@@ -200,6 +204,7 @@ impl TextEdit {
         self.focus = s.focus;
         self.marks = s.marks.clone();
         self.blocks = s.blocks.clone();
+        self.block_ids = s.block_ids.clone();
         self.block_data = s.block_data.clone();
         self.soft_breaks = s.soft_breaks.clone();
         self.typing = Typing::Inherited;

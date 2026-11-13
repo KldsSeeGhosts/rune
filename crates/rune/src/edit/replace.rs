@@ -15,6 +15,7 @@ impl TextEdit {
         // Callers sync first; a second whole-text pass here would show on every keystroke.
         let del_len = b - a;
         let ins_len = s.len();
+        self.map_block_ids(a, b, s, new_line_block, mark_new_lines_soft);
         if self.block_data.is_empty()
             && self.marks.is_empty()
             && inserted_marks.is_empty()
