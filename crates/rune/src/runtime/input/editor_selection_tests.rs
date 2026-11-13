@@ -14,6 +14,7 @@ pub(super) struct State {
     pub(super) opt_out: bool,
     pub(super) presses: usize,
     pub(super) secure: bool,
+    pub(super) widget_edit: TextEdit,
 }
 
 impl Default for State {
@@ -21,7 +22,8 @@ impl Default for State {
         let edit = TextEdit::default();
         let id = edit.logical_blocks().next().unwrap().id;
         Self { edit, selections: Vec::new(), changes: 0, code: id, task: id,
-            header_height: 32.0, views: false, opt_out: false, presses: 0, secure: false }
+            header_height: 32.0, views: false, opt_out: false, presses: 0, secure: false,
+            widget_edit: TextEdit::new("language filter") }
     }
 }
 

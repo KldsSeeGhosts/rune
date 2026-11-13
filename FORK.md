@@ -120,8 +120,9 @@ therefore remains a gap. It needs model-level selection transaction events or
 stable field bindings; retaining mutable accessors after arbitrary app updates
 is unsafe because a field may have unmounted.
 
-Closing this is not a small notification hook. `TextEdit::set_selection` has only
-a mutable editor, while `runtime/input/editor_selections.rs::next_editor_selection`
+Closing this is not a small notification hook.
+`crates/rune/src/edit.rs::TextEdit::set_selection` has only a mutable editor, while
+`crates/rune/src/runtime/input/editor_selections.rs::Runtime::next_editor_selection`
 reads the final committed snapshot and invokes a callback with app state. A revision
 counter would detect leave/reentry but could not deliver its intermediate positions
 or normalize source between the operations. The enabling change is a bounded
@@ -300,6 +301,22 @@ Touched files:
 - `crates/rune/examples/markdown_composer/{blocks,block_views_tests}.rs`
 - `changelog/unreleased/2026-11-13-composer-block-controls.md`
 
+### R3, text-field widget presses
+
+`R3: preserve editor composition when pressing field widgets`
+
+Text fields inside a block view follow the same pointer-focus rule as other
+widgets. Their ordinary press handlers run, but a pointer press does not enter
+their text-selection path or cancel the containing editor's composition.
+Keyboard focus remains available through ordinary Tab traversal.
+
+Touched files:
+
+- `crates/rune/src/runtime/input/pointer.rs`
+- `crates/rune/src/runtime/input/editor_selection_tests.rs`
+- `crates/rune/src/runtime/commit/block_views_tests.rs`
+- `changelog/unreleased/2026-11-13-block-view-field-focus.md`
+
 ## Rebase notes
 
 For block views, keep three hooks together:
@@ -322,6 +339,8 @@ composition, not the secure-mask-only `display_index` helper. Preserve pointer f
 for widget descendants; keep Tab traversal, Escape and removed-view focus fallback
 separate from text editing. Default marker paint and task hit targets must not
 duplicate a leading view. Ordinary widget accessibility needs no separate tree.
+The block-view pointer guard must precede `textbox_input` dispatch as well as the
+ordinary control-focus path, since a widget can itself contain text fields.
 Keep the apply hook that unmounts old widget descendants when an input becomes
 secure, including widgets already in an exit presentation.
 The example's attachment builder and handlers live in `markdown_composer/blocks.rs`;
@@ -394,9 +413,9 @@ screen readers, Windows or Linux. Exact per-mutation selection notifications rem
 the R4 gap described above. The example's source grammar handles one balanced bold
 region, not general Markdown parsing.
 
-The block-view change passes the required three-package suite, 3,152 tests passed
+The block-view change passes the required three-package suite, 3,153 tests passed
 and 76 ignored, including doctests, and `cargo check --workspace --all-targets`.
-All 23 block-view runtime tests also pass with `baseline-taffy`. The example has
+All 24 block-view runtime tests also pass with `baseline-taffy`. The example has
 six passing tests with each layout engine. File-size and folder-shape checks have
 no errors. Repository-wide `cargo fmt --check` reports existing formatting drift;
 unrelated files have not been reformatted.
@@ -407,13 +426,13 @@ runtime monomorphizations. These invocation-only settings reduce debug informati
 and bound test concurrency without changing the unoptimized debug test profile:
 
 ```sh
-CARGO_PROFILE_TEST_DEBUG=0 RUST_TEST_THREADS=4 cargo test \
+CARGO_PROFILE_TEST_DEBUG=0 RUST_TEST_THREADS=1 cargo test \
   -p rune -p rune-mermaid -p rune-kit \
   --features rune-kit/markdown,rune-kit/mermaid
 ```
 
 This changes no repository or machine configuration. Debug assertions and overflow
-checks remain enabled. Bounded concurrency avoids AppKit clipboard conversion
-timeouts under concurrent build load.
+checks remain enabled. Run without a concurrent build if the existing AppKit
+clipboard conversion tests time out.
 Do not disable compact unwind generation: that made Rust panic unwinding fail in
 the existing transaction rollback test.

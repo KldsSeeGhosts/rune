@@ -427,3 +427,29 @@ fn securing_an_input_discards_widget_exit_visuals_in_the_same_frame() {
     assert!(rt.presented("task-control").is_none());
     assert!(rt.elements().iter().all(|e| e.text.as_deref() != Some("language")));
 }
+
+#[test]
+fn a_text_field_in_a_block_view_preserves_the_editors_pointer_focus_and_composition() {
+    fn field(s: &State, cx: &mut Cx<State>) -> El {
+        let mut tree = view(s, cx);
+        let control = text_input(&s.widget_edit, TextStyle::new(16.0, 400.0))
+            .key("header").focusable(true).w_full().h(32.0)
+            .on_edit(|s: &mut State| &mut s.widget_edit)
+            .on_press(|s: &mut State| s.presses += 1);
+        let input = tree.children.remove(0)
+            .input_block_view(InputBlockView::header(s.code, col().w_full().child(control)));
+        tree.child(input)
+    }
+    let mut rt = Runtime::new(state(), field, (360.0, 240.0), Env::new(true, 2.0));
+    rt.frame(0.0);
+    rt.ime(Ime::Preedit("日本".into(), Some((0, 3))));
+    rt.frame(0.0);
+    let selection = rt.state.edit.selection();
+    let area = rt.ime_area;
+    click(&mut rt, "header");
+    assert!(rt.focus.is(&node(&rt, "editor").path));
+    assert_eq!(rt.state.edit.preedit(), Some(("日本", Some((0, 3)))));
+    assert_eq!(rt.state.edit.selection(), selection);
+    assert_eq!(rt.ime_area, area);
+    assert_eq!(rt.state.presses, 1);
+}

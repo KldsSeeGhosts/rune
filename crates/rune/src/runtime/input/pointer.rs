@@ -243,7 +243,7 @@ impl<S: 'static> Runtime<S> {
         let second = n.handlers.on_double_press.is_some() && pending.is_some_and(|first| {
             first.path == n.path && press_run::follows(first.at, first.point, now, (x, y), self.double_click_interval)
         });
-        if let Some(ji) = self.textbox_input(ti) {
+        if !block_view && let Some(ji) = self.textbox_input(ti) {
             self.input_down(ji, x, y, now, second);
             return;
         }

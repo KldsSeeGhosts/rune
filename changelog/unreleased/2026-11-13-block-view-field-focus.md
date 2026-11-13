@@ -1,0 +1,1 @@
+- Pressing a text-field element inside an input block view preserves the containing editor's caret and composition, while still delivering the widget's ordinary press handler.
