@@ -11,6 +11,7 @@ impl TextEdit {
         if self.secure {
             self.marks.clear();
             self.blocks.clear();
+            self.block_data.clear();
             self.soft_breaks.clear();
             self.typing = Typing::Inherited;
             return;
@@ -28,6 +29,7 @@ impl TextEdit {
                 }
             }
         }
+        self.sync_block_data();
         self.soft_breaks.sort_unstable();
         self.soft_breaks.dedup();
         self.soft_breaks.retain(|&idx| idx > 0 && (idx as usize) < line_count);
@@ -443,6 +445,7 @@ impl TextEdit {
         self.break_history_group();
         let before = self.snapshot();
         let (first, last) = self.selected_line_range();
+        self.clear_extended_kinds(first, last);
         for i in first..=last {
             if let Some(slot) = self.blocks.get_mut(i) {
                 *slot = block;
@@ -472,6 +475,7 @@ impl TextEdit {
         } else {
             self.break_history_group();
             let before = self.snapshot();
+            self.clear_extended_kinds(first, last);
             for i in first..=last {
                 if let Some(slot) = self.blocks.get_mut(i) {
                     *slot = match (slot.list_level(), block) {
@@ -506,9 +510,10 @@ impl TextEdit {
             if let Some(slot) = self.blocks.get_mut(i)
                 && let Some(lvl) = slot.list_level()
             {
-                *slot = slot.with_level((lvl + 1).min(MAX_LIST_LEVEL));
+                *slot = slot.with_level(lvl.saturating_add(1));
             }
         }
+        self.sync_block_data();
         self.record_change(before, EditKind::Other);
         true
     }
@@ -533,6 +538,7 @@ impl TextEdit {
                 *slot = slot.with_level(lvl.saturating_sub(1));
             }
         }
+        self.sync_block_data();
         self.record_change(before, EditKind::Other);
         true
     }

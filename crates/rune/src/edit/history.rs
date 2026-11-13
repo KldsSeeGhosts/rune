@@ -15,6 +15,7 @@ pub(super) struct Snapshot {
     focus: usize,
     marks: Vec<MarkRange>,
     blocks: Vec<Block>,
+    block_data: Vec<BlockData>,
     soft_breaks: Vec<u32>,
 }
 
@@ -23,6 +24,7 @@ impl Snapshot {
         self.text == other.text
             && self.marks == other.marks
             && self.blocks == other.blocks
+            && self.block_data == other.block_data
             && self.soft_breaks == other.soft_breaks
     }
 }
@@ -79,6 +81,7 @@ impl Change {
             + self.after.text.len()
             + (self.before.marks.len() + self.after.marks.len()) * std::mem::size_of::<MarkRange>()
             + (self.before.blocks.len() + self.after.blocks.len()) * std::mem::size_of::<Block>()
+            + self.before.block_data.iter().chain(&self.after.block_data).map(BlockData::bytes).sum::<usize>()
             + (self.before.soft_breaks.len() + self.after.soft_breaks.len()) * std::mem::size_of::<u32>()
     }
 }
@@ -181,6 +184,7 @@ impl TextEdit {
             focus: self.focus,
             marks: self.marks.clone(),
             blocks: self.blocks.clone(),
+            block_data: self.block_data.clone(),
             soft_breaks: self.soft_breaks.clone(),
         }
     }
@@ -196,6 +200,7 @@ impl TextEdit {
         self.focus = s.focus;
         self.marks = s.marks.clone();
         self.blocks = s.blocks.clone();
+        self.block_data = s.block_data.clone();
         self.soft_breaks = s.soft_breaks.clone();
         self.typing = Typing::Inherited;
         self.cancel_composition();

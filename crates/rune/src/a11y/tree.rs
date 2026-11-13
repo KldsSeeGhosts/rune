@@ -19,14 +19,17 @@ const TOOLTIP: AkId = AkId(2);
 /// Bits under an element's id for the nodes it owns: its text's lines and links.
 const SUB: u32 = 16;
 const LINK_BASE: u64 = 0x8000;
+const BLOCK_BASE: u64 = 0xc000;
 
 pub(crate) fn element_id(id: NodeId) -> AkId { AkId(id.0 << SUB) }
 pub(crate) fn line_id(id: NodeId, line: usize) -> AkId { AkId((id.0 << SUB) | (1 + line as u64).min(LINK_BASE - 1)) }
-pub(crate) fn link_id(id: NodeId, k: usize) -> AkId { AkId((id.0 << SUB) | (LINK_BASE + k as u64).min((1 << SUB) - 1)) }
+pub(crate) fn link_id(id: NodeId, k: usize) -> AkId { AkId((id.0 << SUB) | (LINK_BASE + k as u64).min(BLOCK_BASE - 1)) }
+pub(crate) fn block_id(id: NodeId, k: usize) -> AkId { AkId((id.0 << SUB) | (BLOCK_BASE + k as u64).min((1 << SUB) - 1)) }
 /// The runtime node an AccessKit id names, and which of its own nodes: 0 the element, a line
 /// `1..LINK_BASE`, a link from `LINK_BASE`.
 pub(crate) fn split_id(id: AkId) -> (NodeId, u64) { (NodeId(id.0 >> SUB), id.0 & ((1 << SUB) - 1)) }
-pub(crate) fn sub_link(sub: u64) -> Option<usize> { (sub >= LINK_BASE).then(|| (sub - LINK_BASE) as usize) }
+pub(crate) fn sub_link(sub: u64) -> Option<usize> { (LINK_BASE..BLOCK_BASE).contains(&sub).then(|| (sub - LINK_BASE) as usize) }
+pub(crate) fn sub_block(sub: u64) -> Option<usize> { (sub >= BLOCK_BASE).then(|| (sub - BLOCK_BASE) as usize) }
 
 /// What a tree update read last time: when none of it moved, nothing it builds can have.
 #[derive(Clone, PartialEq, Default)]

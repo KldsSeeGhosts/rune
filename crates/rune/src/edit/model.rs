@@ -5,7 +5,7 @@ use std::ops::Range;
 use crate::color::{oklch, oklcha, Color};
 
 /// Maximum nesting level (`0..=MAX_LIST_LEVEL`) for [`Block::Bullet`] and [`Block::Numbered`].
-pub const MAX_LIST_LEVEL: u8 = 3;
+pub const MAX_LIST_LEVEL: u8 = u8::MAX;
 
 /// An inline formatting mark stored alongside [`TextEdit::text`]. More marks may come, so a
 /// `match` needs a `_` arm.

@@ -17,6 +17,7 @@ pub(super) enum A11yAct {
     Replace(String),
     /// Anchor and focus, in the field's display bytes.
     Select(usize, usize),
+    ToggleTask(usize),
     ScrollIntoView,
     /// Pages (or, with `false`, lines) down and right.
     Scroll { x: i32, y: i32, pages: bool },
@@ -38,6 +39,15 @@ impl<S: 'static> Runtime<S> {
         if !self.allowed(i) || self.subtree_exiting(i) { return false; }
         let n = &self.nodes[i];
         let path = n.path.clone();
+        if let Some(line) = a11y_tree::sub_block(sub) {
+            if request.action == Ak::Click && n.input.as_ref().is_some_and(|input| {
+                input.access.is_some() && matches!(input.edit.block_kind(line), crate::BlockKind::Task { .. })
+            }) {
+                self.queue.push(Action::A11y(path, A11yAct::ToggleTask(line)));
+                return true;
+            }
+            return false;
+        }
         let link = sub_link(sub);
         let handlers = n.handlers.get();
         let pressable = handlers.is_some_and(|h| h.on_press.is_some());
@@ -148,6 +158,12 @@ impl<S: 'static> Runtime<S> {
             A11yAct::Select(a, b) => self.a11y_edit(path, tx, move |e| {
                 let (a, b) = (e.model_index(a), e.model_index(b));
                 e.set_selection(a, b);
+                crate::edit::EditOutcome::default()
+            }),
+            A11yAct::ToggleTask(line) => self.a11y_edit(path, tx, move |e| {
+                if let crate::BlockKind::Task { checked, .. } = e.block_kind(line) {
+                    e.set_task_checked(line, !checked);
+                }
                 crate::edit::EditOutcome::default()
             }),
             A11yAct::ScrollIntoView => {

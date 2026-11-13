@@ -222,6 +222,8 @@ impl El {
     pub(crate) fn sync_input_rich(&mut self) {
         let (Some(inp), Some(t)) = (&self.cold.input, &mut self.text) else { return };
         t.cold.rich_style = Some(inp.rich_style);
+        t.cold.block_style = inp.block_style;
+        t.cold.block_kinds = inp.edit.display_block_kinds(&t.content);
         if inp.edit.is_plain() && inp.decorations.is_empty() {
             // A plain field lays out and draws exactly as before rich editing existed.
             t.spans.clear();
@@ -233,6 +235,7 @@ impl El {
         }
         let (mut base_spans, strikes, rich_links, blocks) =
             inp.edit.rich_display_specs(t.style, inp.rich_style);
+        base_spans.extend(inp.edit.heading_spans(t.style, inp.block_style));
         for d in &inp.decorations {
             for (ds, de) in inp.edit.map_range_to_display(d.start as usize, d.end as usize) {
                 let mut sp = d.clone();

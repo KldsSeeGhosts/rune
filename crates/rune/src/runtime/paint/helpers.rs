@@ -22,7 +22,7 @@ pub(super) fn emit_block_decorations(
     clip: [f32; 4],
     fade: [f32; 4],
 ) {
-    use crate::edit::{Block, MAX_LIST_LEVEL};
+    use crate::edit::{Block, BlockKind, MAX_LIST_LEVEL};
     let line_h_default = spec.style.line_px() * s * tk;
     let box_w = (x1 - x0).max(layout.full_width() * tk).max(40.0 * s * tk);
     let mut para_idx = 0usize;
@@ -90,7 +90,33 @@ pub(super) fn emit_block_decorations(
             flush_quote(instances, &mut quote_run);
         }
 
-        if first_line_of_para {
+        let custom_marker = first_line_of_para && !is_soft && match spec.cold.block_kinds.get(para_idx) {
+            Some(BlockKind::Task { checked, .. }) => {
+                let style = spec.cold.block_style;
+                let d = style.checkbox_size.max(0.0) * s * tk;
+                let stroke = (style.checkbox_stroke * s * tk).clamp(0.0, d * 0.5);
+                let indent = blk.indent_pt(spec.style.size) * s * tk;
+                let x = origin[0] + indent - d - 5.0 * s * tk + glide[0];
+                let y = baseline - spec.style.size * 0.34 * s * tk - d * 0.5 + glide[1];
+                let color = premul(style.checkbox_color.or(spec.rich_style().marker).unwrap_or(text_color), o, srgb);
+                for r in [[x, y, d, stroke], [x, y + d - stroke, d, stroke], [x, y, stroke, d], [x + d - stroke, y, stroke, d]] {
+                    instances.push(rect_inst(r, color, 0.0, clip, fade));
+                }
+                if *checked {
+                    let pad = (stroke * 2.0).max(d * 0.2);
+                    instances.push(rect_inst([x + pad, y + pad, (d - 2.0 * pad).max(0.0), (d - 2.0 * pad).max(0.0)], color, 0.0, clip, fade));
+                }
+                true
+            }
+            Some(BlockKind::Rule) => {
+                let style = spec.cold.block_style;
+                let color = premul(style.rule_color.or(spec.rich_style().marker).unwrap_or(text_color), o, srgb);
+                instances.push(rect_inst([x0 + glide[0], (top + bot) * 0.5 + glide[1], box_w, style.rule_thickness.max(0.0) * s * tk], color, 0.0, clip, fade));
+                true
+            }
+            _ => false,
+        };
+        if first_line_of_para && !custom_marker {
             match blk {
                 Block::Bullet(lvl) => {
                     let l = (lvl.min(MAX_LIST_LEVEL)) as usize;

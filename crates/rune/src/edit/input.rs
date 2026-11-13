@@ -110,6 +110,8 @@ impl TextEdit {
                         self.insert_newline(blk, true);
                     } else if m.shift || m.alt {
                         self.insert_newline(blk, false);
+                    } else if matches!(self.block_kind(line_idx), BlockKind::Heading { .. }) {
+                        self.insert_newline(Block::Paragraph, false);
                     } else {
                         match blk {
                             Block::Code => {
@@ -396,8 +398,8 @@ impl TextEdit {
         // HTML that only colours or lays out text (a code editor's copy) would collapse the
         // plain text's whitespace for nothing.
         let frag = self.keep_allowed(frag);
-        let unformatted = frag.marks.is_empty() && frag.blocks.iter().all(|&b| b == Block::Paragraph);
-        if !plain.is_empty() && (frag.text.is_empty() || unformatted) {
+        let unformatted = frag.is_plain();
+        if !plain.is_empty() && ((frag.text.is_empty() && frag.block_data.is_empty()) || unformatted) {
             return self.paste(plain);
         }
         if !self.rich {
@@ -477,6 +479,17 @@ impl TextEdit {
                 let target = line_idx + sb as usize;
                 if target > 0 {
                     self.soft_breaks.push(target as u32);
+                }
+            }
+        }
+
+        // Adopt authored data using the same first-line merge rule as the legacy blocks.
+        if !frag.block_data.is_empty() {
+            self.block_data.resize(self.blocks.len(), Default::default());
+            let first = usize::from(!(orig_block == Block::Paragraph && (line_was_empty || (frag_lines > 1 && ins_at == line_range.start))));
+            for k in first..frag_lines {
+                if let (Some(slot), Some(data)) = (self.block_data.get_mut(line_idx + k), frag.block_data.get(k)) {
+                    *slot = data.clone();
                 }
             }
         }

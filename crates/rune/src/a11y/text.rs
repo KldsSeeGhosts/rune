@@ -89,6 +89,7 @@ impl<S: 'static> Runtime<S> {
         let me = out.len() - 1;
         let runs = n.input.is_some() || (spec.selectable && !n.is_secure());
         if runs && let Some(lines) = self.a11y_lines(i) {
+            let mut semantic: Option<(usize, usize)> = None;
             for (k, l) in lines.iter().enumerate() {
                 let id = line_id(n.id, k);
                 let mut run = AkNode::new(Role::TextRun);
@@ -102,7 +103,43 @@ impl<S: 'static> Runtime<S> {
                 run.set_character_positions(l.positions.clone());
                 run.set_character_widths(l.widths.clone());
                 run.set_word_starts(l.word_starts.clone());
-                out[me].1.push_child(id);
+                let parent = if let Some(input) = n.input.as_deref().filter(|i| !i.edit.is_secure()) {
+                    let paragraph = input.edit.line_of_byte(input.edit.model_index(l.range.start));
+                    let kind = input.edit.block_kind(paragraph);
+                    let role = match kind {
+                        crate::BlockKind::Heading { .. } => Some(Role::Heading),
+                        crate::BlockKind::Task { .. } => Some(Role::CheckBox),
+                        crate::BlockKind::Rule => Some(Role::Splitter),
+                        _ => None,
+                    };
+                    if let Some(role) = role {
+                        if semantic.is_none_or(|(p, _)| p != paragraph) {
+                            let mut block = AkNode::new(role);
+                            block.set_bounds(run.bounds().unwrap());
+                            match kind {
+                                crate::BlockKind::Heading { level } => block.set_level(level as usize),
+                                crate::BlockKind::Task { checked, .. } => {
+                                    block.set_toggled(if checked { accesskit::Toggled::True } else { accesskit::Toggled::False });
+                                    if input.access.is_some() { block.add_action(Ak::Click); }
+                                }
+                                _ => {}
+                            }
+                            let bid = a11y_tree::block_id(n.id, paragraph);
+                            out[me].1.push_child(bid);
+                            let slot = out.len();
+                            out.push((bid, block));
+                            semantic = Some((paragraph, slot));
+                        } else if let Some((_, slot)) = semantic {
+                            let mut bounds = out[slot].1.bounds().unwrap();
+                            bounds.y1 = run.bounds().unwrap().y1;
+                            bounds.x0 = bounds.x0.min(run.bounds().unwrap().x0);
+                            bounds.x1 = bounds.x1.max(run.bounds().unwrap().x1);
+                            out[slot].1.set_bounds(bounds);
+                        }
+                        semantic.unwrap().1
+                    } else { semantic = None; me }
+                } else { me };
+                out[parent].1.push_child(id);
                 out.push((id, run));
             }
             if let Some(sel) = self.a11y_selection(i, &lines) { out[me].1.set_text_selection(sel); }

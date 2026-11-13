@@ -114,16 +114,16 @@ fn count_newlines_matches_a_plain_count() {
 }
 
 #[test]
-fn list_levels_stop_at_max_list_level() {
+fn list_levels_are_not_capped_at_three_and_saturate_without_overflow() {
     let mut e = TextEdit::new("a").rich();
     e.set_block(Block::Bullet(0));
-    for _ in 0..10 { e.key(&k(Key::Tab), None); }
+    for _ in 0..300 { e.key(&k(Key::Tab), None); }
     assert_eq!(e.blocks(), &[Block::Bullet(MAX_LIST_LEVEL)]);
     e.set_block(Block::Numbered(9));
-    assert_eq!(e.blocks(), &[Block::Numbered(MAX_LIST_LEVEL)]);
-    assert_eq!(TextEdit::from_parts("a", vec![], vec![Block::Bullet(200)]).blocks(), &[Block::Bullet(MAX_LIST_LEVEL)]);
+    assert_eq!(e.blocks(), &[Block::Numbered(9)]);
+    assert_eq!(TextEdit::from_parts("a", vec![], vec![Block::Bullet(200)]).blocks(), &[Block::Bullet(200)]);
     let deep = TextEdit::from_html(&format!("{}a", "<ul><li>".repeat(8)));
-    assert_eq!(deep.blocks().last(), Some(&Block::Bullet(MAX_LIST_LEVEL)));
+    assert_eq!(deep.blocks().last(), Some(&Block::Bullet(7)));
 }
 
 #[test]

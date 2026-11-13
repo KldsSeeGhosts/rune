@@ -1,0 +1,1 @@
+- Rich editors retain authored block source through edits, undo, redo, HTML and rich paste. Additive `BlockKind` and `BlockStyle` APIs provide headings, task checkboxes and rules without changing the exhaustive `Block` enum. List levels now use the full `u8` range instead of stopping at three.

@@ -21,6 +21,7 @@ pub struct InputSpec {
     pub(crate) revealed_override: Option<bool>,
     pub(crate) decorations: Vec<Span>,
     pub(crate) rich_style: crate::edit::RichStyle,
+    pub(crate) block_style: crate::edit::BlockStyle,
     pub(crate) pill_icon: Option<PillIconFn>,
     pub(crate) pill_style: Option<PillStyleFn>,
     pub(crate) access: Option<EditFn>,
@@ -81,6 +82,7 @@ pub fn text_input(edit: &TextEdit, style: TextStyle) -> El {
         revealed_override: None,
         decorations: Vec::new(),
         rich_style: crate::edit::RichStyle::default(),
+        block_style: crate::edit::BlockStyle::default(),
         pill_icon: None,
         pill_style: None,
         access: None,
@@ -116,6 +118,14 @@ pub fn edit_access<S, F: for<'a> Fn(&'a mut S) -> &'a mut TextEdit>(f: F) -> F {
 }
 
 impl El {
+    /// Rendering defaults for headings, task checkboxes and rules in this editor.
+    pub fn block_style(mut self, style: crate::edit::BlockStyle) -> Self {
+        if let Some(input) = self.cold.get_mut_if_some().and_then(|c| c.input.as_deref_mut()) {
+            input.block_style = style;
+            self.sync_input_rich();
+        }
+        self
+    }
     /// On the root or around text fields: the app's spell checking setting, `on`, which the
     /// fields' menus show as a Spellcheck item with a check mark, as a browser's do. Picking it
     /// calls `f` with the setting flipped; the app keeps it and passes it to its fields'
