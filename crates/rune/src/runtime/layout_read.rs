@@ -328,7 +328,7 @@ impl<S: 'static> Runtime<S> {
 
     /// [`Self::laid_out`], or when not `scrolled`, where it would be with every viewport
     /// scrolled to its origin, which only a commit moves.
-    fn placed(&self, nodes: &[Node], i: usize, scrolled: bool) -> [f32; 4] {
+    pub(super) fn placed(&self, nodes: &[Node], i: usize, scrolled: bool) -> [f32; 4] {
         let unscrolled;
         let scrolls = if scrolled { &self.scrolls } else { unscrolled = HashMap::default(); &unscrolled };
         let t = nodes[i].target;
@@ -370,6 +370,7 @@ impl<S: 'static> Runtime<S> {
     fn layout_of(&self, nodes: &[Node], index: Option<&KeyIndex>, key: &str) -> Option<[f32; 4]> {
         if key == SELECTION { return None; }
         let (key, scrolled) = key.strip_prefix(WINDOW).map_or((key, false), |key| (key, true));
+        if input_pills::is_rect_key(key) { return self.input_pill_layout_rect(nodes, index, key, scrolled); }
         let first = match index {
             Some(index) => index.first(nodes, key),
             None => key_index::scan_first(nodes, key),

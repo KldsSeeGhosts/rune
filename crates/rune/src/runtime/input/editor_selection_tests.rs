@@ -15,6 +15,12 @@ pub(super) struct State {
     pub(super) presses: usize,
     pub(super) secure: bool,
     pub(super) widget_edit: TextEdit,
+    pub(super) observe_pills: bool,
+    pub(super) pill_presses: Vec<(String, std::ops::Range<usize>)>,
+    pub(super) consume_pill_key: bool,
+    pub(super) pill_field_visible: bool,
+    pub(super) pill_single_line: bool,
+    pub(super) pill_normalize: bool,
 }
 
 impl Default for State {
@@ -23,7 +29,9 @@ impl Default for State {
         let id = edit.logical_blocks().next().unwrap().id;
         Self { edit, selections: Vec::new(), changes: 0, code: id, task: id,
             header_height: 32.0, views: false, opt_out: false, presses: 0, secure: false,
-            widget_edit: TextEdit::new("language filter") }
+            widget_edit: TextEdit::new("language filter"), observe_pills: false,
+            pill_presses: Vec::new(), consume_pill_key: false, pill_field_visible: true,
+            pill_single_line: false, pill_normalize: false }
     }
 }
 

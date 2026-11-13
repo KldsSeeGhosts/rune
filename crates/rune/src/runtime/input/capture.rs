@@ -49,18 +49,20 @@ pub(crate) struct Held {
     pub(crate) left: bool,
     /// The link of its text it began on: a release on the same link activates it.
     pub(crate) link: Option<usize>,
+    pub(crate) input_pill: Option<super::input_pills::Target>,
 }
 
 impl Held {
     /// A press that just went down at `at`, inside its element and still.
     pub(crate) fn new(path: String, drag: Drag, button: PointerButton, at: (f32, f32), down_at: f64, second: bool, drag_out: Option<f32>) -> Self {
-        Self { path, drag, button, at, down_at, hit: Hit::Inside, moved: false, second, drag_out, left: false, link: None }
+        Self { path, drag, button, at, down_at, hit: Hit::Inside, moved: false, second, drag_out, left: false, link: None, input_pill: None }
     }
 
     pub(crate) fn inside(&self) -> bool { self.hit == Hit::Inside }
 
     /// Began on link `link` of its text.
     pub(crate) fn on_link(self, link: Option<usize>) -> Self { Self { link, ..self } }
+    pub(crate) fn on_input_pill(self, input_pill: Option<super::input_pills::Target>) -> Self { Self { input_pill, ..self } }
 }
 
 #[derive(Clone, Debug)]

@@ -33,6 +33,7 @@ impl<S: 'static> Runtime<S> {
         {
             return true;
         }
+        if self.input_pill_key(ev, repeat, one) { return true; }
         one.physical_key = None;
         // Inside a list item or code block, Tab (and Shift+Tab in lists) edits the document by default.
         if ev.key == crate::edit::Key::Tab

@@ -394,6 +394,8 @@ mod hit;
 mod build;
 #[path = "runtime/input/keys.rs"]
 mod keys;
+#[path = "runtime/input/pills.rs"]
+mod input_pills;
 #[path = "runtime/input/pointer.rs"]
 mod pointer;
 use pointer::CLICK_SLOP;

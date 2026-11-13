@@ -74,6 +74,11 @@ impl CodeAttributes {
 }
 
 impl TextEdit {
+    pub(crate) fn logical_id_at(&self, byte: usize) -> Option<BlockId> {
+        if self.secure || !self.text.is_char_boundary(byte) { return None; }
+        self.block_ids.get(self.line_of_byte(byte)).copied()
+    }
+
     /// A synced input snapshot's block start in its displayed document. A composition can
     /// temporarily hide a block boundary without removing its model identity.
     pub(crate) fn block_view_start(&self, id: BlockId, display: &str) -> Option<usize> {

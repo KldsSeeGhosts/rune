@@ -3,6 +3,7 @@
 use super::*;
 
 mod block_view;
+mod pill;
 pub use block_view::{InputBlockPosition, InputBlockView};
 pub(crate) use block_view::BlockViewSpec;
 
@@ -33,6 +34,7 @@ pub struct InputSpec {
     pub(crate) key: Option<InputKeyFn>,
     pub(crate) change: Option<PressFn>,
     pub(crate) selection_change: Option<PressFn>,
+    pub(crate) pill_press: Option<pill::PillPressFn>,
     pub(crate) paste: Option<InputPasteFn>,
     /// `El::spellcheck`: the platform's checker marks misspelled words.
     pub(crate) spellcheck: bool,
@@ -96,6 +98,7 @@ pub fn text_input(edit: &TextEdit, style: TextStyle) -> El {
         key: None,
         change: None,
         selection_change: None,
+        pill_press: None,
         paste: None,
         spellcheck: false,
         selection_style: None,

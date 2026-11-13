@@ -374,6 +374,7 @@ impl<S: 'static> Runtime<S> {
             && self.live_index(&h.path).is_some_and(|i| self.nodes[i].handlers.on_double_press.is_some()))
             .then(|| capture::FirstClick { path: h.path.clone(), at: h.down_at, point: h.at });
         let Some(held) = self.press.release(first) else { return };
+        self.input_pill_up(&held, x, y);
         let inside = held.inside();
         let capture::Held { path, drag: d, button, at, down_at, moved, second: double, link, .. } = *held;
         self.refresh_hover_within();

@@ -166,6 +166,7 @@ impl<S: 'static> Runtime<S> {
         } else {
             self.input_click.presses.press(&path, now, (x, y), self.double_click_interval).min(3) as u8
         };
+        let pill = self.input_pill_down(ji, clicks, x, y);
         self.input_click.capture = Capture::Held { dragging: Some(path.clone()) };
         self.input_click.steps.push_back((path.clone(), Step::Down { clicks, shift }));
         self.queue.push(Action::Focus(path.clone(), ix, iy));
@@ -185,7 +186,7 @@ impl<S: 'static> Runtime<S> {
             window: [x, y],
             screen: self.screen_at(x, y),
         };
-        self.press.hold(capture::Held::new(path, d, crate::PointerButton::Primary, (x, y), down_at, second, None));
+        self.press.hold(capture::Held::new(path, d, crate::PointerButton::Primary, (x, y), down_at, second, None).on_input_pill(pill));
     }
 
     pub(super) fn input_drag(&mut self, x: f32, y: f32, drag_move: bool) {

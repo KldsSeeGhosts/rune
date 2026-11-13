@@ -73,7 +73,7 @@ mod pill_chips;
 mod rich_layout;
 mod shaping;
 mod run;
-pub(crate) use pill_chips::{bare_icons, pill_chips};
+pub(crate) use pill_chips::{bare_icons, pill_chips, pill_rects};
 mod support;
 pub use support::SmoothingSupport;
 pub(crate) use support::note_dual_source;

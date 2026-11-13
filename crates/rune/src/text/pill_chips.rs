@@ -50,11 +50,46 @@ pub(crate) fn pill_chips(
     out: &mut Vec<PaintedDeco>,
     icons: &mut Vec<(&'static Icon, u32, [f32; 2], Option<Color>)>,
 ) {
+    let pm = PillMetrics::new(size);
+    visit_pill_rects(layout, pills, size, scale, origin, |i, _, rect, leading| {
+        let pill = &pills[i];
+        out.push(PaintedDeco::new(Deco { rect, color: pill.bg.unwrap_or(bg), radius: (5.0 * scale).min(rect[3] * 0.5) }, None, 0));
+        if let (Some(icon), Some(rtl_lead)) = (pill.icon, leading) {
+            let px = (pm.icon * scale).round().max(1.0);
+            let ix = if rtl_lead { rect[0] + rect[2] - pm.pad * scale - px } else { rect[0] + pm.pad * scale };
+            icons.push((icon, px as u32, [ix.round(), ((rect[1] + rect[1] + rect[3] - px) * 0.5).round()], pill.fg));
+        }
+    });
+}
+
+/// Painted chip rectangles, tagged by pill index, including padding and icons.
+/// When bidi inline boxes yield a degenerate chip, retain its visible label's bounds.
+pub(crate) fn pill_rects(layout: &Layout<Ink>, pills: &[PillChip], size: f32, scale: f32, origin: [f32; 2]) -> Vec<(usize, [f32; 4])> {
+    let mut out = Vec::new();
+    visit_pill_rects(layout, pills, size, scale, origin, |i, line, rect, _| {
+        if rect[2] > 0.0 {
+            out.push((i, rect));
+        } else {
+            let p = &pills[i];
+            for (b, l) in range_boxes(layout, p.start as usize, p.end as usize, false) {
+                if l == line {
+                    out.push((i, [(origin[0] + b.x0 as f32).round(), rect[1], (b.x1 - b.x0) as f32, rect[3]]));
+                }
+            }
+        }
+    });
+    out
+}
+
+fn visit_pill_rects(
+    layout: &Layout<Ink>, pills: &[PillChip], size: f32, scale: f32,
+    origin: [f32; 2], mut visit: impl FnMut(usize, usize, [f32; 4], Option<bool>),
+) {
     if pills.is_empty() {
         return;
     }
     let pm = PillMetrics::new(size);
-    for line in layout.lines() {
+    for (line_ix, line) in layout.lines().enumerate() {
         let m = line.metrics();
         let boxes: Vec<parley::PositionedInlineBox> = line
             .items()
@@ -105,7 +140,7 @@ pub(crate) fn pill_chips(
                 let (top, bot) = ((base - asc - 1.0 * scale).round(), (base + desc + 1.0 * scale).round());
                 let x0 = gr_x0.min(m.inline_min_coord + m.offset);
                 let rect = [(origin[0] + x0).round(), top, (x1 - x0).max(0.0).round(), bot - top];
-                out.push(PaintedDeco::new(Deco { rect, color: pill.bg.unwrap_or(bg), radius: (5.0 * scale).min(rect[3] * 0.5) }, None, 0));
+                visit(i, line_ix, rect, None);
                 continue;
             };
             let rtl_lead = gr_x0 <= gr_x1 && (lead.x - gr_x1).abs() < 1.0;
@@ -138,12 +173,7 @@ pub(crate) fn pill_chips(
             let top = (base - asc - 1.0 * scale).round();
             let bot = (base + desc + 1.0 * scale).round();
             let rect = [(origin[0] + x0).round(), top, (x1 - x0).max(0.0).round(), bot - top];
-            out.push(PaintedDeco::new(Deco { rect, color: pill.bg.unwrap_or(bg), radius: (5.0 * scale).min(rect[3] * 0.5) }, None, 0));
-            if let Some(icon) = pill.icon {
-                let px = (pm.icon * scale).round().max(1.0);
-                let ix = if rtl_lead { rect[0] + rect[2] - pm.pad * scale - px } else { rect[0] + pm.pad * scale };
-                icons.push((icon, px as u32, [ix.round(), ((top + bot - px) * 0.5).round()], pill.fg));
-            }
+            visit(i, line_ix, rect, Some(rtl_lead));
         }
     }
 }

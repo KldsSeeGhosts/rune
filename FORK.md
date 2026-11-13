@@ -356,7 +356,70 @@ Touched files:
 - `crates/rune/src/runtime/selection/{blocks,click}.rs`
 - `changelog/unreleased/2026-11-13-block-style-options.md`
 
+### R3, input pill activation and geometry
+
+`R3: add input pill activation and tracked geometry`
+
+`El::on_input_pill_press` adds a callback receiving the pill id and its current
+UTF-8 model range. A primary click must start and end on the same pill without
+exceeding the existing click slop. The callback runs after normal caret placement;
+it does not replace selection handling. Only the first click in a double-click
+sequence activates. Fields without a callback retain their pointer and key behavior.
+Unmodified Enter or Space activates an exactly selected pill, after input, element
+and app key handlers decline. Repeated keys do not repeat activation. Keyboard
+activation leaves composition keys to the editor. Secure inputs never activate.
+
+`Cx::input_pill_rect(input_key, id)` reads the first occurrence.
+`Cx::input_pill_range_rect(input_key, id, range)` reads one exact occurrence when
+ids repeat. Reads track layout and scrolling, including single-line horizontal
+scrolling. Rectangles include the painted chip's padding and icon, unite wrapped
+fragments, and exclude outer margins. Missing or concealed pills return `None`.
+They use `window_layout` coordinates: window layout points after scrolling,
+unclipped, without visual transforms or animation. For popover placement, convert
+`[x, y, w, h]` to `[x, y, x + w, y + h]` for `anchor_rect`, which takes and returns
+edge coordinates. Place the result in a root pinned overlay.
+
+Held presses record logical block identity and the pill's occurrence within it.
+This survives a typing-run boundary and source normalization that moves byte ranges.
+Replacing the editor, removing the pill, or unmounting its field drops activation.
+Delivery resolves the current binding after a route commit, never a retained app
+accessor from pointer-down or a key handler.
+
+Tests compare callback-enabled and callback-free caret, selection and paint output;
+cover click, drag, double click, duplicate ids, source normalization, model removal,
+keyboard refusal and repeats, scrolling, rewrapping, and RTL/mixed-direction text.
+
+Touched files:
+
+- `crates/rune/src/el/input.rs`
+- `crates/rune/src/el/input/pill.rs`
+- `crates/rune/src/edit/logical.rs`
+- `crates/rune/src/text.rs`
+- `crates/rune/src/text/pill_chips.rs`
+- `crates/rune/src/runtime.rs`
+- `crates/rune/src/runtime/{frame,layout_read}.rs`
+- `crates/rune/src/runtime/input/{action,capture,editor_selection_tests,keys,pointer,pills,pills_tests}.rs`
+- `crates/rune/src/runtime/selection/click.rs`
+- `changelog/unreleased/2026-11-13-input-pill-press.md`
+
 ## Rebase notes
+
+For input pill activation, preserve the candidate capture in
+`selection/click.rs::input_down` and delivery before the input-capture early return
+in `input/pointer.rs::release`. Reuse `capture::Held` cancellation and click slop;
+do not send input clicks through ordinary `on_press` or link routing.
+`input/keys.rs::route_key` offers pill activation after the input key handler,
+before default editing. Its opt-in helper offers the app key handler refusal.
+Retain `Action::InputPill` in `frame.rs`'s route-commit boundary and re-resolve
+bindings after a declining app key handler.
+
+Pill rectangle reads enter `layout_read.rs::layout_of` under a private window key,
+so existing layout feedback and scroll dependencies also update popover anchors.
+Keep `text/pill_chips.rs::visit_pill_rects` shared by painting and hit testing.
+Do not approximate hit boxes with text ranges alone: chips reserve inline-box
+padding, and a wrapped pill has a separate painted fragment on each line.
+If bidi inline boxes produce a zero-width chip, geometry retains the visible
+label's bounds. This fallback does not change existing chip painting.
 
 For optional block styling, retain the per-range heading-height hook in
 `text/shaping.rs::layout_keyed_heights` when merging upstream shaping changes.
@@ -464,11 +527,12 @@ screen readers, Windows or Linux. Exact per-mutation selection notifications rem
 the R4 gap described above. The example's source grammar handles one balanced bold
 region, not general Markdown parsing.
 
-The fork passes the required three-package suite, 3,162 tests passed
+The fork passes the required three-package suite, 3,178 tests passed
 and 76 ignored, including doctests, and `cargo check --workspace --all-targets`.
 All 24 block-view runtime tests and 11 focused block-style/rule tests also pass
 with `baseline-taffy`. The styling change adds nine regression tests. The example has
-six passing tests with each layout engine. File-size and folder-shape checks have
+six passing tests with each layout engine. All 16 input-pill tests pass with both
+layout engines. File-size and folder-shape checks have
 no errors. Repository-wide `cargo fmt --check` reports existing formatting drift;
 unrelated files have not been reformatted.
 
