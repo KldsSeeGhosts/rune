@@ -1,0 +1,1 @@
+- Text fields can report selection changes from every runtime input path. Nonvisual `AppMark`s retain explicit boundary behavior through editing, history and HTML. `TextEdit::transact` returns a composable `EditMap`; transient rewrites preserve redo and rebase the next recorded edit against canonical snapshot history.

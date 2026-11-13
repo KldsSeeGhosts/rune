@@ -15,6 +15,8 @@ use crate::color::Color;
 use crate::text::Link;
 
 mod block_data;
+mod app_mark;
+pub use app_mark::AppMark;
 pub use block_data::{BlockAttributes, BlockKind};
 use block_data::BlockData;
 mod block_style;
@@ -23,6 +25,8 @@ mod caret_motion;
 #[cfg(test)]
 mod block_tests;
 mod display;
+mod edit_map;
+pub use edit_map::{EditMap, MapBias};
 mod history;
 mod html;
 mod ime;
@@ -36,12 +40,17 @@ mod logical;
 pub use logical::{BlockId, BlockRangeError, CodeAttributes, LogicalBlock};
 #[cfg(test)]
 mod logical_tests;
+#[cfg(test)]
+mod transaction_tests;
 mod replace;
 pub use model::{Block, MAX_LIST_LEVEL, Mark, MarkRange, ParagraphInfo, RichStyle};
 mod secure;
 pub(crate) use secure::{MULTILINE_SECURE_MASK, Masking};
 use secure::LineMode;
 mod typing;
+mod transaction;
+pub use transaction::{TransactionError, TransactionOptions};
+use transaction::{Capture, Rewrite};
 use typing::Typing;
 pub(crate) use history::History;
 use history::{EditKind, EditedTag, Group};
@@ -67,6 +76,8 @@ pub struct TextEdit {
     history: Arc<History>,
     /// Set inside [`TextEdit::undo_group`]: edits record nothing until the outermost group ends.
     group: Group,
+    capture: Capture,
+    rewrite: Rewrite,
     secure: bool,
     revealed: bool,
     /// Mirrors the field's `El::single_line()`; the runtime sets it before each edit.
@@ -178,6 +189,8 @@ impl TextEdit {
             typing: Typing::Inherited,
             history: Arc::default(),
             group: Group::Closed,
+            capture: Capture::Idle,
+            rewrite: Rewrite::Canonical,
             secure: false,
             revealed: false,
             line_mode: LineMode::Default,
@@ -232,7 +245,7 @@ impl TextEdit {
     /// TextEdit::new("").rich().allow_marks([Mark::Bold, Mark::Italic, Mark::Strike, Mark::Code, Mark::Link(String::new())])
     /// ```
     pub fn allow_marks(mut self, marks: impl IntoIterator<Item = Mark>) -> Self {
-        let pill = 1 << Mark::Pill(String::new()).kind_order();
+        let pill = (1 << Mark::Pill(String::new()).kind_order()) | (1 << 7);
         self.allowed_marks = Some(marks.into_iter().fold(pill, |bits, m| bits | 1 << m.kind_order()));
         self.sync_invariants();
         self
@@ -431,6 +444,7 @@ impl TextEdit {
         self.cancel_composition();
         self.edited_tag = EditedTag(false);
         self.history = Arc::default();
+        self.rewrite = Rewrite::Canonical;
         if self.group.is_open() {
             self.group = self.group_from_here();
         }
@@ -483,6 +497,7 @@ impl TextEdit {
     /// Move the caret to `byte` (clamped to a character boundary of `self.text`) and collapse the
     /// selection, clearing any pending typing style.
     pub fn set_caret(&mut self, byte: usize) {
+        self.explicit_selection();
         let b = Self::clamp_char_boundary(&self.text, byte);
         self.anchor = b;
         self.focus = b;
@@ -494,6 +509,7 @@ impl TextEdit {
     /// `self.text`), clearing any pending typing style. A selection that ends inside a
     /// [`Mark::Pill`] grows to cover it.
     pub fn set_selection(&mut self, anchor: usize, focus: usize) {
+        self.explicit_selection();
         self.anchor = Self::clamp_char_boundary(&self.text, anchor);
         self.focus = Self::clamp_char_boundary(&self.text, focus);
         self.snap_to_pills();

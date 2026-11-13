@@ -10,9 +10,9 @@ pub(super) const HISTORY_BYTES: usize = 1024 * 1024;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct Snapshot {
-    text: Arc<Zeroizing<String>>,
-    anchor: usize,
-    focus: usize,
+    pub(super) text: Arc<Zeroizing<String>>,
+    pub(super) anchor: usize,
+    pub(super) focus: usize,
     marks: Vec<MarkRange>,
     blocks: Vec<Block>,
     block_ids: Vec<BlockId>,
@@ -82,6 +82,9 @@ impl Change {
         self.before.text.len()
             + self.after.text.len()
             + (self.before.marks.len() + self.after.marks.len()) * std::mem::size_of::<MarkRange>()
+            + self.before.marks.iter().chain(&self.after.marks).map(|m| {
+                if let Mark::App(app) = &m.mark { app.id().len() } else { 0 }
+            }).sum::<usize>()
             + (self.before.blocks.len() + self.after.blocks.len()) * std::mem::size_of::<Block>()
             + self.before.block_data.iter().chain(&self.after.block_data).map(BlockData::bytes).sum::<usize>()
             + (self.before.block_ids.len() + self.after.block_ids.len()) * std::mem::size_of::<BlockId>()
@@ -158,6 +161,7 @@ impl TextEdit {
     /// (after loading a sent message back into a composer to edit it, say).
     pub fn clear_history(&mut self) {
         self.history = Arc::default();
+        self.rewrite = Rewrite::Canonical;
         if self.group.is_open() {
             self.sync_invariants();
             self.group = self.group_from_here();
@@ -197,7 +201,7 @@ impl TextEdit {
         self.recording().then(|| self.snapshot_now())
     }
 
-    fn restore(&mut self, s: &Snapshot) {
+    pub(super) fn restore(&mut self, s: &Snapshot) {
         self.text.zeroize();
         self.text.push_str(&s.text);
         self.anchor = s.anchor;
@@ -220,6 +224,8 @@ impl TextEdit {
         if before.same_doc(&after) {
             return;
         }
+        let before = self.take_rewrite_baseline(before.anchor, before.focus).unwrap_or(before);
+        if before.same_doc(&after) { return; }
         let h = Arc::make_mut(&mut self.history);
         let expected = h.redo.last().map(|c| &c.before).or_else(|| h.undo.back().map(|c| &c.after));
         if expected.is_some_and(|last| last.text != before.text) {
@@ -297,6 +303,7 @@ impl TextEdit {
         if !self.recording() { return; }
         self.break_history_group();
         if self.preedit().is_some() { self.cancel_composition(); return; }
+        self.restore_canonical();
         let h = Arc::make_mut(&mut self.history);
         let Some(change) = h.undo.pop_back() else { return };
         // Public model text may have been replaced by the app. Never restore stale history.
@@ -309,6 +316,7 @@ impl TextEdit {
         if !self.recording() { return; }
         self.break_history_group();
         if self.preedit().is_some() { self.cancel_composition(); return; }
+        self.restore_canonical();
         let h = Arc::make_mut(&mut self.history);
         let Some(change) = h.redo.pop() else { return };
         if self.text != change.before.text.as_str() { *h = History::default(); return; }

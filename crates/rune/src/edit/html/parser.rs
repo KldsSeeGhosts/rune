@@ -19,6 +19,7 @@ pub(crate) fn parse_html(html: &str) -> TextEdit {
     let mut soft_breaks: Vec<u32> = Vec::new();
     let mut authored_lines = Vec::new();
     let mut code_groups = Vec::new();
+    let mut app_lines = Vec::new();
     // Authored line text is already normalized. Unlike arbitrary HTML, keep its whitespace.
     let mut authored_tag: Option<String> = None;
 
@@ -314,6 +315,7 @@ pub(crate) fn parse_html(html: &str) -> TextEdit {
                         let line = blocks.len() - 1;
                         if let Some(kind) = data.kind { blocks[line] = kind.legacy(); }
                         authored_lines.push((line, data));
+                        app_lines.push((line, attributed::read_apps(attrs)));
                         if extract_attr(attrs, "data-rune-soft").as_deref() == Some("true") && line > 0 {
                             soft_breaks.push(line as u32);
                         }
@@ -617,5 +619,6 @@ pub(crate) fn parse_html(html: &str) -> TextEdit {
         edit.sync_invariants();
         edit.repair_block_ids();
     }
+    attributed::restore_apps(&mut edit, app_lines);
     edit
 }

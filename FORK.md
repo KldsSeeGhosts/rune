@@ -78,6 +78,53 @@ Additional touched files:
 R2 also touches the R1 model, replacement, history, HTML, rich-paste, secure-mode,
 and export hooks listed above.
 
+### R4, source transactions and selection notifications
+
+`R4: add source transactions, app marks and selection notifications`
+
+Adds `AppMark`, `EditMap`, `MapBias`, `TransactionOptions`, and `TransactionError`.
+`set_app_mark`, `app_marks`, and `remove_app_mark` manage nonvisual ranges.
+The existing non-exhaustive `Mark` enum gains `App`; its kind bit is always allowed,
+as app-owned pills are. App marks survive code blocks and have independent
+inclusive/exclusive start and end boundaries. HTML stores their line-relative
+ranges in inert `data-rune-apps` attributes, including covered newline bytes.
+
+`replace_range` edits a specified range without a preliminary selection change.
+`transact(Recorded, ...)` records one step and returns the sequence's byte map.
+`transact(Transient, ...)` preserves undo and redo and maps the incoming selection,
+unless the closure explicitly sets it. Maps compose with `then` and reverse their
+coordinates with `inverse`; bias resolves inserted/deleted boundary ambiguity.
+Use model operations inside transactions, not direct public-field assignment.
+
+Instead of rebasing old snapshots into a different Markdown representation,
+transient mode retains their canonical document. Undo or redo restores that shape
+before replay. A new recorded edit uses the canonical before-state and includes
+the source rewrite in its after-state. This is the replay/rebase strategy required
+by source reveal after undo. It preserves redo without clearing or rewriting the
+stacks. Old snapshots remain in the shapes in which their edits were recorded.
+Transactions reject active composition, secure fields, nested transactions and
+open undo groups. A panic restores the document, history and detached baseline.
+
+`on_input_selection_change` reports each completed runtime action, update or poll,
+including pointer, keyboard, accessibility, IME cursor and history movement.
+It does not use `on_edit` calls as notifications. Callback-owned normalization
+settles in that same notification; it does not recursively notify itself.
+Secure fields do not report selection. A direct model mutation outside the
+runtime reports on the next runtime frame/update, not synchronously in the setter.
+
+Additional touched files:
+
+- `crates/rune/src/edit/{app_mark,edit_map,transaction,transaction_tests,display}.rs`
+- `crates/rune/src/runtime/input/{editor_selections,editor_selection_tests,action}.rs`
+- `crates/rune/src/runtime/frame/updates.rs`
+- `crates/rune/src/runtime/{frame,commit}.rs`
+- `crates/rune/src/runtime.rs`
+- `changelog/unreleased/2026-11-12-editor-transactions.md`
+
+R4 also touches the model, replacement, history, HTML, secure-mode, input builder
+and public exports listed under R1/R2. Runtime update/request functions moved
+unchanged into `frame/updates.rs` before adding the update notification hook.
+
 ## Rebase notes
 
 The replacement engine and HTML parser were extracted without changing their
@@ -93,6 +140,18 @@ When upstream changes these functions, transplant its implementation into
   Snapshots include ids and their byte cost. Structural setters repair disjoint ids.
   HTML's line record carries the persisted id, but the live identity table owns it.
   Rich paste remaps ids with one map per pasted fragment, not one map per line.
+- R4's replacement hook captures the actual pill-expanded range in `EditMap`.
+  App marks map their own boundaries rather than inheriting a typing style.
+  Keep them out of the code-block mark stripping and intrinsic style generation.
+- Snapshot recording consumes a detached canonical baseline only for a real
+  recorded edit. Undo/redo restore it after composition cancellation and before
+  checking the snapshot's expected text. `clear_history`, secure mode and full
+  replacement discard that detached baseline.
+- Selection observers belong to `editor_selections`, not to `on_edit`. Register
+  them after a commit applies nodes. Notify after actions and external updates,
+  and after polls before draining input. Fields without observers incur no
+  per-action tree scan. Preserve these notification boundaries when upstream
+  changes action routing or frame polling.
 - `apply_text_and_attr_replace` skips the plain fast path when authored data exists
   and calls `map_block_data` before changing the legacy blocks.
 - `sync_invariants` reconciles the authored data after legacy blocks. Legacy setters
@@ -115,5 +174,4 @@ When upstream changes these functions, transplant its implementation into
 
 Tests exercise the model and headless runtime. They do not verify native IME,
 screen readers, Windows or Linux. A stored rule kind is not yet an atomic object
-selection. Block widgets and transient source/history rewriting require their
-own capabilities; this first commit does not claim to provide them.
+selection. Block widgets require their own layout capability.

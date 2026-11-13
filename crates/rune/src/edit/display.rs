@@ -111,7 +111,7 @@ impl TextEdit {
                     links.push(Link::new(r_start as usize..r_end as usize, url.clone()));
                 }
                 // The chip and its colours come from `display_pills`.
-                Mark::Pill(_) => {}
+                Mark::Pill(_) | Mark::App(_) => {}
             }
         };
 

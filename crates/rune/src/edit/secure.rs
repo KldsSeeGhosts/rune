@@ -54,6 +54,7 @@ impl TextEdit {
         self.secure = secure;
         if secure {
             self.history = Arc::default();
+            self.rewrite = Rewrite::Canonical;
             if self.group.is_open() {
                 self.group = Group::Unrecorded;
             }

@@ -228,7 +228,7 @@ fn parse_style_marks(style: &str, add: &mut Vec<Mark>, remove: &mut Vec<Mark>) {
 
 /// Serializes byte range `range` of `edit` to HTML.
 pub(crate) fn serialize_html(edit: &TextEdit, range: Range<usize>) -> String {
-    if !edit.block_data.is_empty() || edit.blocks.windows(2).enumerate().any(|(i, b)| {
+    if !edit.block_data.is_empty() || edit.marks.iter().any(|m| m.mark.is_app()) || edit.blocks.windows(2).enumerate().any(|(i, b)| {
         b == [Block::Code, Block::Code] && edit.block_ids[i] != edit.block_ids[i + 1]
     }) {
         return attributed::serialize(edit, range);
@@ -417,6 +417,7 @@ fn serialize_marks(edit: &TextEdit, range: Range<usize>, out: &mut String) {
             Mark::Strike => 4,
             Mark::Code => 5,
             Mark::Pill(_) => 6,
+            Mark::App(_) => 7,
         });
         for m in &active {
             match m {
@@ -430,7 +431,7 @@ fn serialize_marks(edit: &TextEdit, range: Range<usize>, out: &mut String) {
                     escape_html(url, out);
                     out.push_str("\">");
                 }
-                Mark::Pill(_) => {}
+                Mark::Pill(_) | Mark::App(_) => {}
             }
         }
         escape_html(&edit.text[a..b], out);
@@ -442,7 +443,7 @@ fn serialize_marks(edit: &TextEdit, range: Range<usize>, out: &mut String) {
                 Mark::Strike => out.push_str("</s>"),
                 Mark::Code => out.push_str("</code>"),
                 Mark::Link(_) => out.push_str("</a>"),
-                Mark::Pill(_) => {}
+                Mark::Pill(_) | Mark::App(_) => {}
             }
         }
     }

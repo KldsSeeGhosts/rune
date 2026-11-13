@@ -79,6 +79,7 @@ impl TextEdit {
             // One pass: cut each mark around the (sorted, disjoint) code ranges it overlaps.
             let mut out = Vec::with_capacity(self.marks.len());
             for m in self.marks.drain(..) {
+                if m.mark.is_app() { out.push(m); continue; }
                 let mut start = m.start;
                 let first = code_ranges.partition_point(|cr| cr.end <= start);
                 for cr in &code_ranges[first..] {
@@ -99,7 +100,7 @@ impl TextEdit {
 
         // Merge overlapping or adjacent ranges of the same mark kind.
         // For `Mark::Link`, later entries win over earlier overlapping links.
-        let mut by_kind: [Vec<MarkRange>; 7] = Default::default();
+        let mut by_kind: [Vec<MarkRange>; 8] = Default::default();
         for m in self.marks.drain(..) {
             if m.start < m.end {
                 by_kind[m.mark.kind_order() as usize].push(m);
@@ -111,7 +112,25 @@ impl TextEdit {
             if list.is_empty() {
                 continue;
             }
-            if kind_idx == 6 {
+            if kind_idx == 7 {
+                list.sort_by(|a, b| {
+                    let order = match (&a.mark, &b.mark) {
+                        (Mark::App(a), Mark::App(b)) => a.id().cmp(b.id()),
+                        _ => std::cmp::Ordering::Equal,
+                    };
+                    order.then(a.start.cmp(&b.start)).then(a.end.cmp(&b.end))
+                });
+                let mut current: Option<MarkRange> = None;
+                for m in list {
+                    if let Some(c) = &mut current && c.mark == m.mark && m.start <= c.end {
+                        c.end = c.end.max(m.end);
+                    } else {
+                        if let Some(c) = current.take() { merged.push(c); }
+                        current = Some(m);
+                    }
+                }
+                if let Some(c) = current { merged.push(c); }
+            } else if kind_idx == 6 {
                 // `Mark::Pill`: whole objects on one line that never merge; the first of two
                 // overlapping pills wins.
                 list.sort_by_key(|m| (m.start, m.end));
@@ -207,7 +226,7 @@ impl TextEdit {
         }
         let mut out = Vec::new();
         for m in &self.marks {
-            if m.start < pos && pos <= m.end && !m.mark.is_pill() && !out.iter().any(|existing: &Mark| existing.same_kind(&m.mark)) {
+            if m.start < pos && pos <= m.end && !m.mark.is_pill() && !m.mark.is_app() && !out.iter().any(|existing: &Mark| existing.same_kind(&m.mark)) {
                 out.push(m.mark.clone());
             }
         }

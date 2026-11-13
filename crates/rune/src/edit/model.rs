@@ -24,6 +24,8 @@ pub enum Mark {
     /// chip ([`El::pill_style`](crate::El::pill_style), [`El::pill_colors`](crate::El::pill_colors),
     /// [`El::pill_icon`](crate::El::pill_icon)). Insert one with [`TextEdit::insert_pill`].
     Pill(String),
+    /// An app-owned, nonvisual range with explicit insertion boundary behavior.
+    App(super::AppMark),
 }
 
 impl Mark {
@@ -37,6 +39,7 @@ impl Mark {
             | (Mark::Code, Mark::Code)
             | (Mark::Link(_), Mark::Link(_))
             | (Mark::Pill(_), Mark::Pill(_)) => true,
+            (Mark::App(a), Mark::App(b)) => a.id() == b.id(),
             _ => false,
         }
     }
@@ -60,6 +63,7 @@ impl Mark {
     pub(crate) fn is_pill(&self) -> bool {
         matches!(self, Mark::Pill(_))
     }
+    pub(crate) fn is_app(&self) -> bool { matches!(self, Mark::App(_)) }
 
     pub(crate) fn kind_order(&self) -> u8 {
         match self {
@@ -70,6 +74,7 @@ impl Mark {
             Mark::Code => 4,
             Mark::Link(_) => 5,
             Mark::Pill(_) => 6,
+            Mark::App(_) => 7,
         }
     }
 }

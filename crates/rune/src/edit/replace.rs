@@ -16,6 +16,7 @@ impl TextEdit {
         let del_len = b - a;
         let ins_len = s.len();
         self.map_block_ids(a, b, s, new_line_block, mark_new_lines_soft);
+        self.capture_replace(a, b, ins_len);
         if self.block_data.is_empty()
             && self.marks.is_empty()
             && inserted_marks.is_empty()
@@ -108,7 +109,12 @@ impl TextEdit {
         // Shift and split existing inline marks around `a..b`.
         let mut updated_marks = Vec::with_capacity(self.marks.len() + inserted_marks.len());
         for m in self.marks.drain(..) {
-            if m.end <= a {
+            if let Mark::App(app) = &m.mark {
+                let range = app.map(m.range(), a, b, ins_len);
+                if !range.is_empty() {
+                    updated_marks.push(MarkRange::new(range, m.mark));
+                }
+            } else if m.end <= a {
                 updated_marks.push(m);
             } else if m.start >= b {
                 updated_marks.push(MarkRange {
@@ -138,7 +144,7 @@ impl TextEdit {
         }
         if ins_len > 0 {
             // Typed or replacing text never becomes a pill.
-            for im in inserted_marks.iter().filter(|m| !m.is_pill()) {
+            for im in inserted_marks.iter().filter(|m| !m.is_pill() && !m.is_app()) {
                 // Avoid wrapping a pure newline at the trailing edge of a mark unless inside the mark.
                 if s == "\n" {
                     let was_inside = updated_marks.iter().any(|m| m.mark == *im && m.start >= a + ins_len);

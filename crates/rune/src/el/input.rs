@@ -28,6 +28,7 @@ pub struct InputSpec {
     pub(crate) submit: Option<PressFn>,
     pub(crate) key: Option<InputKeyFn>,
     pub(crate) change: Option<PressFn>,
+    pub(crate) selection_change: Option<PressFn>,
     pub(crate) paste: Option<InputPasteFn>,
     /// `El::spellcheck`: the platform's checker marks misspelled words.
     pub(crate) spellcheck: bool,
@@ -89,6 +90,7 @@ pub fn text_input(edit: &TextEdit, style: TextStyle) -> El {
         submit: None,
         key: None,
         change: None,
+        selection_change: None,
         paste: None,
         spellcheck: false,
         selection_style: None,
@@ -199,6 +201,16 @@ impl El {
     pub fn on_input_change<S: 'static>(mut self, f: impl Fn(&mut S, &mut Tx) + 'static) -> Self {
         if let Some(input) = self.cold.get_mut_if_some().and_then(|c| c.input.as_deref_mut()) {
             input.change = Some(Rc::new(move |s, tx| f(downcast::<S>(s), tx)));
+        }
+        self
+    }
+    /// Called after a selection or IME cursor changes through keyboard, pointer,
+    /// accessibility, history, or a programmatic runtime update/poll. Reads the updated
+    /// model through app state. Unchanged selections and secure fields do not notify.
+    /// Changes made by the callback itself settle as part of this notification.
+    pub fn on_input_selection_change<S: 'static>(mut self, f: impl Fn(&mut S, &mut Tx) + 'static) -> Self {
+        if let Some(input) = self.cold.get_mut_if_some().and_then(|c| c.input.as_deref_mut()) {
+            input.selection_change = Some(Rc::new(move |s, tx| f(downcast::<S>(s), tx)));
         }
         self
     }
