@@ -277,6 +277,29 @@ Touched files:
 - `crates/rune/src/text/{composite,composite_tests,line_break}.rs`
 - `changelog/unreleased/2026-11-12-input-block-views.md`
 
+### R3, composer block controls
+
+`R3: demonstrate code headers and leading task controls`
+
+The `markdown_composer` example attaches one pressable language header to every
+code block and an ordinary checkbox element to every task's leading slot.
+Language presses cycle Rust, TypeScript and Python through `CodeAttributes`,
+preserving the info-string suffix, opening fence and optional exact close.
+Checkbox presses update the same logical task. Both operations record history
+without moving the caret or canceling a code block's composition.
+
+The existing source-reveal example still uses transient transactions and selection
+notifications. Example tests cover language cycling, exact source retention,
+checkbox undo/redo, source reveal with language history and stable attachments,
+and a language press during simulated composition. This is a small API example,
+not the reference application's searchable language picker or Markdown grammar.
+
+Touched files:
+
+- `crates/rune/examples/markdown_composer.rs`
+- `crates/rune/examples/markdown_composer/{blocks,block_views_tests}.rs`
+- `changelog/unreleased/2026-11-13-composer-block-controls.md`
+
 ## Rebase notes
 
 For block views, keep three hooks together:
@@ -301,6 +324,9 @@ separate from text editing. Default marker paint and task hit targets must not
 duplicate a leading view. Ordinary widget accessibility needs no separate tree.
 Keep the apply hook that unmounts old widget descendants when an input becomes
 secure, including widgets already in an exit presentation.
+The example's attachment builder and handlers live in `markdown_composer/blocks.rs`;
+they need no private layout or runtime API. Preserve the code info suffix and close
+when adapting the language control.
 
 The replacement engine and HTML parser were extracted without changing their
 algorithms before adding hooks, to keep the owning files below the size limit.
@@ -367,6 +393,13 @@ Tests exercise the model and headless runtime. They do not verify native IME,
 screen readers, Windows or Linux. Exact per-mutation selection notifications remain
 the R4 gap described above. The example's source grammar handles one balanced bold
 region, not general Markdown parsing.
+
+The block-view change passes the required three-package suite, 3,152 tests passed
+and 76 ignored, including doctests, and `cargo check --workspace --all-targets`.
+All 23 block-view runtime tests also pass with `baseline-taffy`. The example has
+six passing tests with each layout engine. File-size and folder-shape checks have
+no errors. Repository-wide `cargo fmt --check` reports existing formatting drift;
+unrelated files have not been reformatted.
 
 On macOS, the large library-test executable can hit Apple's compact-unwind linker
 assertion or fail to spawn near 2 GB. Editor tests share their fixture state to limit

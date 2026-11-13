@@ -1,0 +1,1 @@
+- The Markdown composer example uses ordinary block views for code language headers and task checkboxes. Language changes retain exact fence source and info-string suffixes, record undo/redo, and preserve the editor's caret and composition.

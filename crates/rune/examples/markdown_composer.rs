@@ -1,5 +1,4 @@
-//! Completed Markdown editor model APIs. Run `cargo run -p rune --example markdown_composer`.
-//! This is not full composer parity: block-header widgets need composite editor layout.
+//! Markdown composer APIs. Run `cargo run -p rune --example markdown_composer`.
 //! The source example handles one balanced bold region, not general Markdown parsing.
 
 use std::ops::Range;
@@ -9,6 +8,9 @@ use rune::{
     AppMark, AppSpec, BlockAttributes, BlockKind, CodeAttributes, Cx, El, Mark, MarkRange,
     TextEdit, TransactionOptions, Tx, col, text, text_input,
 };
+
+#[path = "markdown_composer/blocks.rs"]
+mod blocks;
 
 struct State { edit: TextEdit }
 
@@ -100,24 +102,29 @@ fn normalize(s: &mut State, _: &mut Tx) {
 
 fn view(s: &State, _: &mut Cx<State>) -> El {
     let t = tok::theme(true);
+    let composer = text_input(&s.edit, type_::BODY).key("composer").w_full().min_h(260.0)
+        .padding(16.0).fill(t.card).color(t.text)
+        .on_edit(|s: &mut State| &mut s.edit)
+        .on_submit(|s: &mut State, _| s.edit.insert("\n"))
+        .on_input_change(normalize)
+        .on_input_selection_change(normalize);
     col().w_full().h_full().padding(24.0).gap(12.0).fill(t.bg)
-        .child(text("Markdown model APIs").font(type_::LABEL).color(t.text))
+        .child(text("Markdown composer").font(type_::LABEL).color(t.text))
         .child(text("Click the checkbox or rule. Enter the bold word to reveal its source. Undo and redo keep working.")
             .font(type_::BODY).color(t.text_secondary).wrap().w_full())
-        .child(text_input(&s.edit, type_::BODY).key("composer").w_full().min_h(260.0)
-            .padding(16.0).fill(t.card).color(t.text)
-            .on_edit(|s: &mut State| &mut s.edit)
-            .on_submit(|s: &mut State, _| s.edit.insert("\n"))
-            .on_input_change(normalize)
-            .on_input_selection_change(normalize))
-        .child(text("Code fence attributes are retained. A language header control is not implemented.")
+        .child(blocks::attach(composer, &s.edit))
+        .child(text("Press a code language to cycle it. Tab visits block controls. Escape returns to the editor.")
             .font(type_::LABEL).color(t.text_secondary).wrap().w_full())
 }
 
 fn main() {
-    rune::run(AppSpec::new("Markdown model APIs", (680.0, 460.0), State::default, view));
+    rune::run(AppSpec::new("Markdown composer", (680.0, 460.0), State::default, view));
 }
 
 #[cfg(test)]
 #[path = "markdown_composer/tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "markdown_composer/block_views_tests.rs"]
+mod block_views_tests;
